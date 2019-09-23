@@ -53,9 +53,11 @@ def get_episode_weather(episode):
 class CoILDataset(Dataset):
     """ The conditional imitation learning dataset"""
 
-    def __init__(self, root_dir, transform=None, preload_name=None):
+    def __init__(self, root_dir, transform=None, preload_name=None, scooter=False):
         # Setting the root directory for this dataset
         self.root_dir = root_dir
+        # Setting condition for scooter or CARLA
+        self.scooter=scooter
         # We add to the preload name all the remove labels
         if g_conf.REMOVE is not None and g_conf.REMOVE is not "None":
             name, self._remove_params = parse_remove_configuration(g_conf.REMOVE)
@@ -142,7 +144,7 @@ class CoILDataset(Dataset):
         return not self._check_remove_function(measurement_data, self._remove_params)
 
     def _get_final_measurement(self, speed, measurement_data, angle,
-                               directions, avaliable_measurements_dict):
+                               directions, avaliable_measurements_dict, scooter=False):
         """
         Function to load the measurement with a certain angle and augmented direction.
         Also, it will choose if the brake is gona be present or if acceleration -1,1 is the default.
@@ -157,12 +159,12 @@ class CoILDataset(Dataset):
         else:
             # We have to copy since it reference a file.
             measurement_augmented = copy.copy(measurement_data)
-
-        if 'gameTimestamp' in measurement_augmented:
-            time_stamp = measurement_augmented['gameTimestamp']
-        else:
-           time_stamp = measurement_augmented['elapsed_seconds']
-
+        if not scooter:
+            if 'gameTimestamp' in measurement_augmented:
+                time_stamp = measurement_augmented['gameTimestamp']
+            else:
+               time_stamp = measurement_augmented['elapsed_seconds']
+        
         final_measurement = {}
         # We go for every available measurement, previously tested
         # and update for the measurements vec that is used on the training.
@@ -173,7 +175,8 @@ class CoILDataset(Dataset):
         # Add now the measurements that actually need some kind of processing
         final_measurement.update({'speed_module': speed / g_conf.SPEED_FACTOR})
         final_measurement.update({'directions': directions})
-        final_measurement.update({'game_time': time_stamp})
+        if not scooter:
+            final_measurement.update({'game_time': time_stamp})
 
         return final_measurement
 
@@ -242,7 +245,7 @@ class CoILDataset(Dataset):
                 directions = measurement_data['directions']
                 final_measurement = self._get_final_measurement(speed, measurement_data, 0,
                                                                 directions,
-                                                                available_measurements_dict)
+                                                                available_measurements_dict, self.scooter)
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
@@ -257,7 +260,7 @@ class CoILDataset(Dataset):
 
                 final_measurement = self._get_final_measurement(speed, measurement_data, -30.0,
                                                                 directions,
-                                                                available_measurements_dict)
+                                                                available_measurements_dict, self.scooter)
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
@@ -269,7 +272,7 @@ class CoILDataset(Dataset):
 
                 final_measurement = self._get_final_measurement(speed, measurement_data, 30.0,
                                                                 directions,
-                                                                available_measurements_dict)
+                                                                available_measurements_dict, self.scooter)
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)

@@ -100,6 +100,11 @@ if __name__ == '__main__':
         dest='record_collisions',
         help='Set to run carla using docker'
     )
+    argparser.add_argument(
+        '-sc', '--scooter',
+        action='store_true',
+        help='Train for Carla or Scooter'
+    )
     args = argparser.parse_args()
 
     # Check if the vector of GPUs passed are valid.
@@ -147,7 +152,7 @@ if __name__ == '__main__':
 
         if args.single_process == 'train':
             execute_train(gpu="0", exp_batch=args.folder, exp_alias=args.exp,
-                          suppress_output=False, number_of_workers= args.number_of_workers)
+                          suppress_output=False, number_of_workers= args.number_of_workers, scooter=args.scooter)
 
         elif args.single_process == 'validation':
             execute_validation(gpu="0", exp_batch=args.folder, exp_alias=args.exp,

@@ -15,7 +15,7 @@ from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_che
 
 
 # The main function maybe we could call it with a default name
-def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12):
+def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12, scooter=False):
     """
         The main training function. This functions loads the latest checkpoint
         for a given, exp_batch (folder) and exp_alias (experiment configuration).
@@ -93,8 +93,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         # Instantiate the class used to read a dataset. The coil dataset generator
         # can be found
         dataset = CoILDataset(full_dataset, transform=augmenter,
-                              preload_name=str(g_conf.NUMBER_OF_HOURS)
-                                               + 'hours_' + g_conf.TRAIN_DATASET_NAME)
+                              preload_name=str(g_conf.NUMBER_OF_HOURS) + 'hours_' + g_conf.TRAIN_DATASET_NAME, scooter=scooter)
         print ("Loaded dataset")
 
         data_loader = select_balancing_strategy(dataset, iteration, number_of_workers)
