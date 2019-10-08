@@ -23,9 +23,11 @@ def forward_speed(measurement_data):
     return speed
 
 
-def get_speed(measurement_data):
+def get_speed(measurement_data,scooter = False):
     """ Extract the proper speed from the measurement data dict """
-
+    if scooter is True:
+        return measurement_data['speed']
+        
     # If the forward speed is not on the dataset it is because speed is zero.
     if 'playerMeasurements' in measurement_data and \
             'forwardSpeed' in measurement_data['playerMeasurements']:
