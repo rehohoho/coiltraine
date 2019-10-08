@@ -3,6 +3,7 @@ import glob
 import traceback
 import collections
 import sys
+import re
 import math
 import copy
 import json
@@ -53,11 +54,13 @@ def get_episode_weather(episode):
 class CoILDataset(Dataset):
     """ The conditional imitation learning dataset"""
 
-    def __init__(self, root_dir, transform=None, preload_name=None, scooter=False):
+    def __init__(self, root_dir, transform=None, preload_name=None, scooter=False, fps = 5):
         # Setting the root directory for this dataset
         self.root_dir = root_dir
         # Setting condition for scooter or CARLA
+        # assume a default value of 5 fps
         self.scooter=scooter
+        self.fps=fps
         # We add to the preload name all the remove labels
         if g_conf.REMOVE is not None and g_conf.REMOVE is not "None":
             name, self._remove_params = parse_remove_configuration(g_conf.REMOVE)
@@ -77,7 +80,10 @@ class CoILDataset(Dataset):
                 os.path.join('_preloads', self.preload_name + '.npy'))
             print(self.sensor_data_names)
         else:
-            self.sensor_data_names, self.measurements = self._pre_load_image_folders(root_dir)
+            if self.scooter:
+                self.sensor_data_names, self.measurements = self._pre_load_image_folders_scooter(root_dir)
+            else:
+                self.sensor_data_names, self.measurements = self._pre_load_image_folders(root_dir)
 
 
         print("preload Name ", self.preload_name)
@@ -153,9 +159,9 @@ class CoILDataset(Dataset):
             The final measurement dict
         """
         if angle != 0:
-            measurement_augmented = self.augment_measurement(copy.copy(measurement_data), angle,
-                                                             3.6 * speed,
-                                                 steer_name=avaliable_measurements_dict['steer'])
+            measurement_augmented = self.augment_measurement(copy.copy(measurement_data), angle,3.6 * speed,
+                                                 steer_name=avaliable_measurements_dict['steer'],
+                                                 scooter = scooter)
         else:
             # We have to copy since it reference a file.
             measurement_augmented = copy.copy(measurement_data)
@@ -173,12 +179,129 @@ class CoILDataset(Dataset):
             final_measurement.update({measurement: measurement_augmented[name_in_dataset]})
 
         # Add now the measurements that actually need some kind of processing
-        final_measurement.update({'speed_module': speed / g_conf.SPEED_FACTOR})
         final_measurement.update({'directions': directions})
-        if not scooter:
+        if scooter:
+            final_measurement.update({'speed': speed})
+        else:
             final_measurement.update({'game_time': time_stamp})
+            final_measurement.update({'speed_module': speed / g_conf.SPEED_FACTOR})
+        
 
         return final_measurement
+
+    def _pre_load_image_folders_scooter(self, path):
+        """
+        Pre load the image folders for each episode, keep in mind that we only take
+        the measurements that we think that are interesting for now. This function is similar to _pre_load_image_folders
+        however the format of data stored is different.
+
+        Args
+            the path for the dataset
+
+        Returns
+            sensor data names: it is a vector with n dimensions being one for each sensor modality
+            for instance, rgb only dataset will have a single vector with all the image names.
+            float_data: all the wanted float data is loaded inside a vector, that is a vector
+            of dictionaries.
+        """
+
+        episodes_list = glob.glob(os.path.join(path, 'episode_*'))
+        sort_nicely(episodes_list)
+        # Do a check if the episodes list is empty
+        if len(episodes_list) == 0:
+            raise ValueError("There are no episodes on the training dataset folder %s" % path)
+
+        sensor_data_names = []
+        float_dicts = []
+
+        number_of_hours_pre_loaded = 0
+
+        # Now we do a check to try to find all the
+        for episode in episodes_list:
+
+            print('Episode ', episode)
+
+            available_measurements_dict = data_parser.check_available_measurements(episode)
+
+            if number_of_hours_pre_loaded > g_conf.NUMBER_OF_HOURS:
+                # The number of wanted hours achieved
+                break
+
+            # Get all the measurements from this episode
+            measurements_list = glob.glob(os.path.join(episode, 'measurement*'))
+            sort_nicely(measurements_list)
+
+            if len(measurements_list) == 0:
+                print("EMPTY EPISODE")
+                continue
+
+            # A simple count to keep track how many measurements were added this episode.
+            count_added_measurements = 0
+
+
+            print(measurements_list)
+            for measurement in measurements_list[:-3]:
+
+                #find the frame number
+                data_point_number = re.findall(r'\d+',measurement)[-1]
+
+                with open(measurement) as f:
+                    measurement_data = json.load(f)
+
+                # depending on the configuration file, we eliminated the kind of measurements
+                # that are not going to be used for this experiment
+                # We extract the interesting subset from the measurement dict
+
+                speed = data_parser.get_speed(measurement_data,self.scooter)
+
+                if "left" in measurement:
+                    camera_angle = -30.0
+                    img_path = 'LeftAugmentationCameraRGB_' + data_point_number + '.png'
+                elif "mid" in measurement:
+                    camera_angle = 0.0
+                    img_path = 'CameraRGB_' + data_point_number + '.png'
+                elif "right" in measurement:
+                    camera_angle = 30.0
+                    img_path = 'RightAugmentationCameraRGB_' + data_point_number + '.png'
+                else:
+                    raise ValueError("{} does not have left, mid or center in its name".format(measurement))
+
+                directions = measurement_data['directions']
+                final_measurement = self._get_final_measurement(speed, measurement_data, camera_angle,
+                                                                directions,
+                                                                available_measurements_dict,self.scooter)
+
+                if self.is_measurement_partof_experiment(final_measurement):
+                    float_dicts.append(final_measurement)
+                    sensor_data_names.append(os.path.join(episode.split('/')[-1], img_path))
+                    count_added_measurements += 1
+
+
+            # Check how many hours were actually added
+
+            last_data_point_number = measurements_list[-4].split('_')[-1].split('.')[0]
+            number_of_hours_pre_loaded += (float(count_added_measurements / self.fps) / 3600.0) 
+            print(" Loaded ", number_of_hours_pre_loaded, " hours of data")
+
+
+        # Make the path to save the pre loaded datasets
+        if not os.path.exists('_preloads'):
+            os.mkdir('_preloads')
+        # If there is a name we saved the preloaded data
+        if self.preload_name is not None:
+            np.save(os.path.join('_preloads', self.preload_name), [sensor_data_names, float_dicts])
+
+        with open("sensor_data_names_scooter.txt","a") as sensor_file:
+            for line in sensor_data_names:
+                sensor_file.write(line+"\n")
+
+
+        with open("float_dict_scooter.txt","a") as float_txt:
+            for dict_sensor in float_dicts:
+                float_txt.write(json.dumps(dict_sensor)+"\n")
+
+
+        return sensor_data_names, float_dicts
 
     def _pre_load_image_folders(self, path):
         """
@@ -245,7 +368,7 @@ class CoILDataset(Dataset):
                 directions = measurement_data['directions']
                 final_measurement = self._get_final_measurement(speed, measurement_data, 0,
                                                                 directions,
-                                                                available_measurements_dict, self.scooter)
+                                                                available_measurements_dict)
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
@@ -260,7 +383,7 @@ class CoILDataset(Dataset):
 
                 final_measurement = self._get_final_measurement(speed, measurement_data, -30.0,
                                                                 directions,
-                                                                available_measurements_dict, self.scooter)
+                                                                available_measurements_dict)
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
@@ -272,7 +395,7 @@ class CoILDataset(Dataset):
 
                 final_measurement = self._get_final_measurement(speed, measurement_data, 30.0,
                                                                 directions,
-                                                                available_measurements_dict, self.scooter)
+                                                                available_measurements_dict)
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
@@ -294,6 +417,15 @@ class CoILDataset(Dataset):
         if self.preload_name is not None:
             np.save(os.path.join('_preloads', self.preload_name), [sensor_data_names, float_dicts])
 
+        with open("sensor_data_names.txt","a") as sensor_file:
+            for line in sensor_data_names:
+                sensor_file.write(line+"\n")
+
+
+        with open("float_dict.txt","a") as float_txt:
+            for dict_sensor in float_dicts:
+                float_txt.write(json.dumps(dict_sensor)+"\n")
+
         return sensor_data_names, float_dicts
 
     def augment_directions(self, directions):
@@ -304,11 +436,11 @@ class CoILDataset(Dataset):
 
         return directions
 
-    def augment_steering(self, camera_angle, steer, speed):
+    def augment_steering(self, camera_angle, steer, speed, scooter = False):
         """
             Apply the steering physical equation to augment for the lateral cameras steering
         Args:
-            camera_angle: the angle of the camera
+            camera_angle: the angle of the camera in degree
             steer: the central steering
             speed: the speed that the car is going
 
@@ -321,26 +453,36 @@ class CoILDataset(Dataset):
 
         pos = camera_angle > 0.0
         neg = camera_angle <= 0.0
-        # You should use the absolute value of speed
-        speed = math.fabs(speed)
+
         rad_camera_angle = math.radians(math.fabs(camera_angle))
-        val = g_conf.AUGMENT_LATERAL_STEERINGS * (
-            math.atan((rad_camera_angle * car_length) / (time_use * speed + 0.05))) / 3.1415
-        steer -= pos * min(val, 0.3)
-        steer += neg * min(val, 0.3)
+        tensor_camera_angle = float(math.fabs(camera_angle)) / 90.0 #convert the camera offset (degrees) into scaled between 0 and 1
 
-        steer = min(1.0, max(-1.0, steer))
+        if scooter:
+            steer -= pos * tensor_camera_angle
+            steer += neg * tensor_camera_angle
+            steer = min(1.0, max(-1.0, steer))
+            return steer
 
-        # print('Angle', camera_angle, ' Steer ', old_steer, ' speed ', speed, 'new steer', steer)
-        return steer
+        else:
+            # You should use the absolute value of speed
+            speed = math.fabs(speed)
+            val = g_conf.AUGMENT_LATERAL_STEERINGS * (
+                math.atan((rad_camera_angle * car_length) / (time_use * speed + 0.05))) / 3.1415
+            steer -= pos * min(val, 0.3)
+            steer += neg * min(val, 0.3)
 
-    def augment_measurement(self, measurements, angle, speed, steer_name='steer'):
+            steer = min(1.0, max(-1.0, steer))
+
+            # print('Angle', camera_angle, ' Steer ', old_steer, ' speed ', speed, 'new steer', steer)
+            return steer
+
+    def augment_measurement(self, measurements, angle, speed, steer_name='steer',scooter = False):
         """
             Augment the steering of a measurement dict
 
         """
         new_steer = self.augment_steering(angle, measurements[steer_name],
-                                          speed)
+                                          speed, scooter = scooter)
         measurements[steer_name] = new_steer
         return measurements
 
