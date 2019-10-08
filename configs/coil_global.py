@@ -42,6 +42,7 @@ _g_conf.AUGMENTATION = None
 
 _g_conf.DATA_USED = 'all' #  central, all, sides,
 _g_conf.USE_NOISE_DATA = True
+_g_conf.ADJUST_STEER = True
 _g_conf.TRAIN_DATASET_NAME = '1HoursW1-3-6-8'  # We only set the dataset in configuration for training
 _g_conf.LOG_SCALAR_WRITING_FREQUENCY = 2   # TODO NEEDS TO BE TESTED ON THE LOGGING FUNCTION ON  CREATE LOG
 _g_conf.LOG_IMAGE_WRITING_FREQUENCY = 1000

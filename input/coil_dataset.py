@@ -291,16 +291,6 @@ class CoILDataset(Dataset):
         if self.preload_name is not None:
             np.save(os.path.join('_preloads', self.preload_name), [sensor_data_names, float_dicts])
 
-        with open("sensor_data_names_scooter.txt","a") as sensor_file:
-            for line in sensor_data_names:
-                sensor_file.write(line+"\n")
-
-
-        with open("float_dict_scooter.txt","a") as float_txt:
-            for dict_sensor in float_dicts:
-                float_txt.write(json.dumps(dict_sensor)+"\n")
-
-
         return sensor_data_names, float_dicts
 
     def _pre_load_image_folders(self, path):
@@ -417,15 +407,6 @@ class CoILDataset(Dataset):
         if self.preload_name is not None:
             np.save(os.path.join('_preloads', self.preload_name), [sensor_data_names, float_dicts])
 
-        with open("sensor_data_names.txt","a") as sensor_file:
-            for line in sensor_data_names:
-                sensor_file.write(line+"\n")
-
-
-        with open("float_dict.txt","a") as float_txt:
-            for dict_sensor in float_dicts:
-                float_txt.write(json.dumps(dict_sensor)+"\n")
-
         return sensor_data_names, float_dicts
 
     def augment_directions(self, directions):
@@ -448,6 +429,10 @@ class CoILDataset(Dataset):
             the augmented steering
 
         """
+        #data is already adjusted
+        if g_conf.ADJUST_STEER is False:
+            return steer
+
         time_use = 1.0
         car_length = 6.0
 
