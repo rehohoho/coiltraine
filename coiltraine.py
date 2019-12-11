@@ -100,6 +100,12 @@ if __name__ == '__main__':
         dest='record_collisions',
         help='Set to run carla using docker'
     )
+    argparser.add_argument(
+        '-so', '--use-seg-output',
+        action='store_true',
+        dest='use_seg_output',
+        default=True
+    )
     args = argparser.parse_args()
 
     # Check if the vector of GPUs passed are valid.
@@ -147,16 +153,15 @@ if __name__ == '__main__':
 
         if args.single_process == 'train':
             execute_train(gpu="0", exp_batch=args.folder, exp_alias=args.exp,
-                          suppress_output=False, number_of_workers= args.number_of_workers)
+                          suppress_output=False, number_of_workers=args.number_of_workers, use_seg_output=args.use_seg_output)
 
         elif args.single_process == 'validation':
             execute_validation(gpu="0", exp_batch=args.folder, exp_alias=args.exp,
-                               dataset=args.validation_datasets[0], suppress_output=False)
+                               dataset=args.validation_datasets[0], suppress_output=False, use_seg_output=args.use_seg_output)
 
         elif args.single_process == 'drive':
             drive_params['suppress_output'] = False
-            execute_drive("0", args.folder, args.exp, list(args.driving_environments)[0], drive_params)
-
+            execute_drive("0", args.folder, args.exp, list(args.driving_environments)[0], drive_params, use_seg_output=args.use_seg_output)
         else:
             raise Exception("Invalid name for single process, chose from (train, validation, test)")
 

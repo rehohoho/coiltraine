@@ -43,7 +43,7 @@ def write_regular_output(iteration, output):
 
 
 # The main function maybe we could call it with a default name
-def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
+def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_output=True):
     latest = None
     try:
         # We set the visible cuda devices

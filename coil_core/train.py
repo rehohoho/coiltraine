@@ -15,7 +15,7 @@ from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_che
 
 
 # The main function maybe we could call it with a default name
-def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12):
+def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12, use_seg_output=True):
     """
         The main training function. This functions loads the latest checkpoint
         for a given, exp_batch (folder) and exp_alias (experiment configuration).
@@ -66,6 +66,9 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                                                  'checkpoints',
                                                  str(g_conf.PRELOAD_MODEL_CHECKPOINT)+'.pth'))
 
+        # Toggle Segmentation Output
+        if use_seg_output:
+            g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] = 1
 
         # Get the latest checkpoint to be loaded
         # returns none if there are no checkpoints saved for this model
