@@ -8,7 +8,7 @@ import torch.optim as optim
 
 from configs import g_conf, set_type_of_process, merge_with_yaml
 from network import CoILModel, Loss, adjust_learning_rate_auto
-from input import CoILDataset, Augmenter, select_balancing_strategy
+from input import CoILDataset, CoILDatasetWithSeg, Augmenter, select_balancing_strategy
 from logger import coil_logger
 from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_checkpoint, \
                                     check_loss_validation_stopped
@@ -95,9 +95,14 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
 
         # Instantiate the class used to read a dataset. The coil dataset generator
         # can be found
-        dataset = CoILDataset(full_dataset, transform=augmenter,
-                              preload_name=str(g_conf.NUMBER_OF_HOURS)
-                                               + 'hours_' + g_conf.TRAIN_DATASET_NAME)
+        if use_seg_output:
+            dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
+                preload_name=str(g_conf.NUMBER_OF_HOURS)
+                    + 'hours_' + g_conf.TRAIN_DATASET_NAME)
+        else: 
+            dataset = CoILDataset(full_dataset, transform=augmenter,
+                preload_name=str(g_conf.NUMBER_OF_HOURS)
+                    + 'hours_' + g_conf.TRAIN_DATASET_NAME)
         print("Loaded dataset")
 
         data_loader = select_balancing_strategy(dataset, iteration, number_of_workers)

@@ -406,3 +406,28 @@ class CoILDataset(Dataset):
 
         return torch.cat(inputs_vec, 1)
 
+
+class CoILDatasetWithSeg(CoILDataset):
+
+    def __init__(self, root_dir, transform=None, preload_name=None):
+        super().__init__(root_dir, transform, preload_name)
+
+    def extract_targets(self, data):
+        """
+        Method used to get to know which positions from the dataset are the targets
+        for this experiments
+        Args:
+            labels: the set of all float data got from the dataset
+
+        Returns:
+            the float data that is actually targets
+
+        Raises
+            value error when the configuration set targets that didn't exist in metadata
+        """
+        targets_vec = []
+        for target_name in g_conf.TARGETS:
+            targets_vec.append(data[target_name])
+        targets_vec.append(data['seg_ground_truth'])
+
+        return torch.cat(targets_vec, 1)
