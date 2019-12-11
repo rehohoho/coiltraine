@@ -10,6 +10,7 @@ from .building_blocks import Conv
 from .building_blocks import Branching
 from .building_blocks import FC
 from .building_blocks import Join
+from .building_blocks import SegmentationBranch
 
 class CoILICRA(nn.Module):
 
@@ -81,6 +82,10 @@ class CoILICRA(nn.Module):
                                        'dropouts': params['speed_branch']['fc']['dropouts'] + [0.0],
                                        'end_layer': True})
 
+        # Segmentation branch
+        if params['branches']['segmentation_head']:
+            self.segmentation_branch = SegmentationBranch(n_class=number_output_neurons)
+
         # Create the fc vector separatedely
         branch_fc_vector = []
         for i in range(params['branches']['number_of_branches']):
@@ -106,7 +111,9 @@ class CoILICRA(nn.Module):
 
     def forward(self, x, a):
         """ ###### APPLY THE PERCEPTION MODULE """
-        x, inter = self.perception(x)
+        x, inter = self.perception(x) # return x, [x0, x1, x2, x3, x4]  # output, intermediate
+        #TODO check inter layers, add segmentation head here
+        
         ## Not a variable, just to store intermediate layers for future vizualization
         #self.intermediate_layers = inter
 
@@ -120,7 +127,11 @@ class CoILICRA(nn.Module):
         speed_branch_output = self.speed_branch(x)
 
         # We concatenate speed with the rest.
-        return branch_outputs + [speed_branch_output]
+        if self.params['branches']['segmentation_head']:
+            seg_map = self.segmentation_branch(inter)
+            return branch_outputs + [speed_branch_output, seg_map]
+        else:
+            return branch_outputs + [speed_branch_output]
 
     def forward_branch(self, x, a, branch_number):
         """
