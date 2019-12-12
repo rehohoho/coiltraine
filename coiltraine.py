@@ -104,7 +104,7 @@ if __name__ == '__main__':
         '-so', '--use-seg-output',
         action='store_true',
         dest='use_seg_output',
-        default=True
+        default=False
     )
     args = argparser.parse_args()
 
