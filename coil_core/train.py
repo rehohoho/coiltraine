@@ -155,7 +155,8 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                 'controls': controls.cuda(),
                 'inputs': dataset.extract_inputs(data).cuda(),
                 'branch_weights': g_conf.BRANCH_LOSS_WEIGHT,
-                'variable_weights': g_conf.VARIABLE_WEIGHT
+                'variable_weights': g_conf.VARIABLE_WEIGHT,
+                'use_seg_output': use_seg_output
             }
             loss, _ = criterion(loss_function_params)
             loss.backward()
