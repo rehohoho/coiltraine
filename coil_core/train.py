@@ -119,7 +119,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             accumulated_time = 0
             loss_window = []
 
-        print ("Before the loss")
+        print("Before the loss")
 
         criterion = Loss(g_conf.LOSS_FUNCTION)
 

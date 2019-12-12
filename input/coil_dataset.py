@@ -141,6 +141,30 @@ class CoILDataset(Dataset):
         # If the measurement data is not removable is because it is part of this experiment dataa
         return not self._check_remove_function(measurement_data, self._remove_params)
 
+    def _read_img_at_idx(self, index, segmentation=False):
+        if segmentation:
+            img_path = os.path.join(self.root_dir,
+                                    self.sensor_data_names[index].split('/')[-2],
+                                    "segmentation_" + self.sensor_data_names[index].split('/')[-1])
+        else:
+            img_path = os.path.join(self.root_dir,
+                                    self.sensor_data_names[index].split('/')[-2],
+                                    self.sensor_data_names[index].split('/')[-1])
+
+        img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        # Apply the image transformation
+        if self.transform is not None:
+            boost = 1
+            img = self.transform(self.batch_read_number * boost, img)
+        else:
+            img = img.transpose(2, 0, 1)
+
+        img = img.astype(np.float)
+        img = torch.from_numpy(img).type(torch.FloatTensor)
+        if not segmentation:
+            img = img / 255.
+        return img
+
     def _get_final_measurement(self, speed, measurement_data, angle,
                                directions, avaliable_measurements_dict):
         """
@@ -412,6 +436,43 @@ class CoILDatasetWithSeg(CoILDataset):
     def __init__(self, root_dir, transform=None, preload_name=None):
         super().__init__(root_dir, transform, preload_name)
 
+    def __getitem__(self, index):
+        """
+        Get item function used by the dataset loader
+        returns all the measurements with the desired image.
+
+        Args:
+            index:
+
+        Returns:
+
+        """
+        try:
+            img = self._read_img_at_idx(index, segmentation=False)
+            seg_img = self._read_img_at_idx(index, segmentation=True)
+            measurements = self.measurements[index].copy()
+            for k, v in measurements.items():
+                v = torch.from_numpy(np.asarray([v, ]))
+                measurements[k] = v.float()
+
+            measurements['rgb'] = img
+            measurements['seg_ground_truth'] = seg_img
+            self.batch_read_number += 1
+        except AttributeError:
+            print ("Blank IMAGE")
+
+            measurements = self.measurements[0].copy()
+            for k, v in measurements.items():
+                v = torch.from_numpy(np.asarray([v, ]))
+                measurements[k] = v.float()
+            measurements['steer'] = 0.0
+            measurements['throttle'] = 0.0
+            measurements['brake'] = 0.0
+            measurements['rgb'] = np.zeros(3, 88, 200)
+            measurements['seg_ground_truth'] = np.zeros(3, 88, 200)
+
+        return measurements
+
     def extract_targets(self, data):
         """
         Method used to get to know which positions from the dataset are the targets
@@ -431,3 +492,4 @@ class CoILDatasetWithSeg(CoILDataset):
         targets_vec.append(data['seg_ground_truth'])
 
         return torch.cat(targets_vec, 1)
+
