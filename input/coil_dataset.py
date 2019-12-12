@@ -228,6 +228,11 @@ class CoILDataset(Dataset):
 
         number_of_hours_pre_loaded = 0
 
+        if len(glob.glob(os.path.join(path, '**', '*CameraRGB_'))) > 0:
+            center_prefix, left_prefix, right_prefix = 'CameraRGB_', 'LeftAugmentationCameraRGB_', 'RightAugmentationCameraRGB_'
+        else:
+            center_prefix, left_prefix, right_prefix = 'CentralRGB', 'LeftRGB', 'RightRGB'
+
         # Now we do a check to try to find all the
         for episode in episodes_list:
 
@@ -270,7 +275,7 @@ class CoILDataset(Dataset):
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
-                    rgb = 'CameraRGB_' + data_point_number + '.png'
+                    rgb = center_prefix + data_point_number + '.png'
                     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
                     count_added_measurements += 1
 
@@ -285,7 +290,7 @@ class CoILDataset(Dataset):
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
-                    rgb = 'LeftAugmentationCameraRGB_' + data_point_number + '.png'
+                    rgb = left_prefix + data_point_number + '.png'
                     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
                     count_added_measurements += 1
 
@@ -297,7 +302,7 @@ class CoILDataset(Dataset):
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
-                    rgb = 'RightAugmentationCameraRGB_' + data_point_number + '.png'
+                    rgb = right_prefix + data_point_number + '.png'
                     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
                     count_added_measurements += 1
 
