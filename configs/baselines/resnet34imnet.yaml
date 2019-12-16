@@ -52,6 +52,7 @@ MODEL_CONFIGURATION:  # Based on the MODEL_TYPE, we specify the structure
     fc:
       neurons: [256, 256]
       dropouts: [0.0, 0.5]
+    segmentation_head: 0
 PRE_TRAINED: True  # If the weights are started with imagenet.
 
 # Optimizer Parameters #
