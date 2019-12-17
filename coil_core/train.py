@@ -5,6 +5,7 @@ import time
 import traceback
 import torch
 import torch.optim as optim
+from torchvision.utils import save_images
 
 from configs import g_conf, set_type_of_process, merge_with_yaml
 from network import CoILModel, Loss, adjust_learning_rate_auto
@@ -16,6 +17,7 @@ from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_che
 
 # The main function maybe we could call it with a default name
 def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12, use_seg_output=True):
+    #TODO save a sample of segmentation output every epoch to check training progress
     """
         The main training function. This functions loads the latest checkpoint
         for a given, exp_batch (folder) and exp_alias (experiment configuration).
@@ -189,6 +191,8 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             """
             coil_logger.add_scalar('Loss', loss.data, iteration)
             coil_logger.add_image('Image', torch.squeeze(data['rgb']), iteration)
+            if use_seg_output:
+                coil_logger.add_image('Segmentation Output', torch.squeeze(branches[-1]), iteration)
             if loss.data < best_loss:
                 best_loss = loss.data.tolist()
                 best_loss_iter = iteration

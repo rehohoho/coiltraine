@@ -127,7 +127,7 @@ def l2_loss(params):
             loss_branches_vec.append(((params['branches'][i] - params['targets']) ** 2
                                             * params['controls_mask'][i])
                                     * params['branch_weights'][i])
-        """ The second last branch is a speed branch"""
+        """ The last branch is a speed branch"""
         loss_branches_vec.append((params['branches'][-1] - params['inputs']) ** 2
                                 * params['branch_weights'][-1]) # speed branch
     return loss_branches_vec, {}
@@ -152,15 +152,26 @@ def l1_loss(params):
     loss_branches_vec = []
     
     # TODO This is hardcoded but all our cases right now uses four branches
-    for i in range(len(params['branches']) - 2):
-        loss_branches_vec.append(torch.abs((params['branches'][i] - params['targets'])
-                                           * params['controls_mask'][i])
-                                 * params['branch_weights'][i])
-    """ The second last branch is a speed branch"""
-    # TODO: Activate or deactivate speed branch loss
-    loss_branches_vec.append(torch.abs(params['branches'][-2] - params['inputs'])
-                             * params['branch_weights'][-2])
-    loss_branches_vec.append(torch.abs(params['branches'][-1] - params['inputs'])
-                             * params['branch_weights'][-1])
-    return loss_branches_vec, {}
+    if params['use_seg_output']:
+        for i in range(len(params['branches']) - 2):
+            loss_branches_vec.append(torch.abs((params['branches'][i] - params['targets'])
+                                            * params['controls_mask'][i])
+                                    * params['branch_weights'][i])
+        """ The second last branch is a speed branch"""
+        # TODO: Activate or deactivate speed branch loss
+        loss_branches_vec.append(torch.abs(params['branches'][-2] - params['inputs'])
+                                * params['branch_weights'][-2])
+        loss_branches_vec.append(torch.abs(params['branches'][-1] - params['inputs'])
+                                * params['branch_weights'][-1])
+        return loss_branches_vec, {}
+    else:
+        for i in range(len(params['branches']) - 1):
+            loss_branches_vec.append(torch.abs((params['branches'][i] - params['targets'])
+                                            * params['controls_mask'][i])
+                                    * params['branch_weights'][i])
+        """ The last branch is a speed branch"""
+        # TODO: Activate or deactivate speed branch loss
+        loss_branches_vec.append(torch.abs(params['branches'][-1] - params['inputs'])
+                                * params['branch_weights'][-1])
+        return loss_branches_vec, {}
 
