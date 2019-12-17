@@ -225,9 +225,9 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
     except KeyboardInterrupt:
         coil_logger.add_message('Error', {'Message': 'Killed By User'})
 
-    except RuntimeError as e:
+#    except RuntimeError as e:
 
-        coil_logger.add_message('Error', {'Message': str(e)})
+#        coil_logger.add_message('Error', {'Message': str(e)})
 
     except:
         traceback.print_exc()
