@@ -145,7 +145,7 @@ class CoILDataset(Dataset):
         if segmentation:
             img_path = os.path.join(self.root_dir,
                                     self.sensor_data_names[index].split('/')[-2],
-                                    "segmentation_" + self.sensor_data_names[index].split('/')[-1])
+                                    self.sensor_data_names[index].split('/')[-1].replace('RGB', 'SemanticSeg'))
         else:
             img_path = os.path.join(self.root_dir,
                                     self.sensor_data_names[index].split('/')[-2],
