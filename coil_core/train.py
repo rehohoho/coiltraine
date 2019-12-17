@@ -5,7 +5,6 @@ import time
 import traceback
 import torch
 import torch.optim as optim
-from torchvision.utils import save_images
 
 from configs import g_conf, set_type_of_process, merge_with_yaml
 from network import CoILModel, Loss, adjust_learning_rate_auto
