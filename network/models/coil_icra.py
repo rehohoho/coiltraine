@@ -83,7 +83,7 @@ class CoILICRA(nn.Module):
                                        'end_layer': True})
 
         # Segmentation branch
-        if params['branches']['segmentation_head']:
+        if 'segmentation_head' in params['branches'].keys():
             self.segmentation_branch = SegmentationBranch(n_class=number_output_neurons)
 
         # Create the fc vector separatedely
@@ -127,7 +127,7 @@ class CoILICRA(nn.Module):
         speed_branch_output = self.speed_branch(x)
 
         # We concatenate speed with the rest.
-        if self.params['branches']['segmentation_head']:
+        if 'segmentation_head' in self.params['branches'].keys():
             seg_map = self.segmentation_branch(inter)
             return branch_outputs + [speed_branch_output, seg_map]
         else:

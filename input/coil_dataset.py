@@ -150,7 +150,7 @@ class CoILDataset(Dataset):
             img_path = os.path.join(self.root_dir,
                                     self.sensor_data_names[index].split('/')[-2],
                                     self.sensor_data_names[index].split('/')[-1])
-
+        print(img_path)
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         # Apply the image transformation
         if self.transform is not None:
@@ -231,8 +231,7 @@ class CoILDataset(Dataset):
         if len(glob.glob(os.path.join(path, '**', '*CameraRGB_'))) > 0:
             center_prefix, left_prefix, right_prefix = 'CameraRGB_', 'LeftAugmentationCameraRGB_', 'RightAugmentationCameraRGB_'
         else:
-            center_prefix, left_prefix, right_prefix = 'CentralRGB', 'LeftRGB', 'RightRGB'
-
+            center_prefix, left_prefix, right_prefix = 'CentralRGB_', 'LeftRGB_', 'RightRGB_'
         # Now we do a check to try to find all the
         for episode in episodes_list:
 
