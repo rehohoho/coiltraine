@@ -452,7 +452,7 @@ class CoILDatasetWithSeg(CoILDataset):
         """
         try:
             img = self._read_img_at_idx(index, segmentation=False)
-            seg_img = self._read_img_at_idx(index, segmentation=True)
+            seg_img = self._read_img_at_idx(index, segmentation=True)[2]
             measurements = self.measurements[index].copy()
             for k, v in measurements.items():
                 v = torch.from_numpy(np.asarray([v, ]))

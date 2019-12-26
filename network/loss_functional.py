@@ -161,6 +161,9 @@ def l1_loss(params):
         # TODO: Activate or deactivate speed branch loss
         loss_branches_vec.append(torch.abs(params['branches'][-2] - params['inputs'])
                                 * params['branch_weights'][-2])
+        print(params['branches'][-1].shape)
+        print(params['seg_ground_truth'].shape)
+
         loss_branches_vec.append(torch.abs(params['branches'][-1] - params['seg_ground_truth'])
                                 * params['branch_weights'][-1])
         return loss_branches_vec, {}
