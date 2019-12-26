@@ -438,6 +438,7 @@ class CoILDatasetWithSeg(CoILDataset):
 
     def __init__(self, root_dir, transform=None, preload_name=None):
         super().__init__(root_dir, transform, preload_name)
+        self.segmentation_n_class = 13 #https://carla.readthedocs.io/en/stable/cameras_and_sensors/#camera-semantic-segmentation
 
     def __getitem__(self, index):
         """
@@ -452,14 +453,19 @@ class CoILDatasetWithSeg(CoILDataset):
         """
         try:
             img = self._read_img_at_idx(index, segmentation=False)
-            seg_img = self._read_img_at_idx(index, segmentation=True)[2]
+
+            single_channel_seg_img = self._read_img_at_idx(index, segmentation=True)[2]
+            seg_ground_truth = np.zeros((self.segmentation_n_class, 88, 200))
+            for i in range(self.segmentation_n_class):
+                seg_ground_truth[i] = single_channel_seg_img == i * 1 #boolean np array cast to int
+
             measurements = self.measurements[index].copy()
             for k, v in measurements.items():
                 v = torch.from_numpy(np.asarray([v, ]))
                 measurements[k] = v.float()
 
             measurements['rgb'] = img
-            measurements['seg_ground_truth'] = seg_img
+            measurements['seg_ground_truth'] = seg_ground_truth
             self.batch_read_number += 1
         except AttributeError:
             print ("Blank IMAGE")
@@ -472,7 +478,7 @@ class CoILDatasetWithSeg(CoILDataset):
             measurements['throttle'] = 0.0
             measurements['brake'] = 0.0
             measurements['rgb'] = np.zeros(3, 88, 200)
-            measurements['seg_ground_truth'] = np.zeros(3, 88, 200)
+            measurements['seg_ground_truth'] = np.zeros(self.segmentation_n_class, 88, 200)
 
         return measurements
     """

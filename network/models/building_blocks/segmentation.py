@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class SegmentationBranch(nn.Module):
 
-    def __init__(self, n_class=512, params=None):
+    def __init__(self, n_class=13, params=None):
         super(SegmentationBranch, self).__init__()
         self.n_class = n_class
         self.relu    = nn.ReLU(inplace=True)
