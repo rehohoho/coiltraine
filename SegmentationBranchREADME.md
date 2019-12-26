@@ -1,11 +1,20 @@
 # Segmentation Branch README
 
-segmentation images need to precede with 'segmentation_'
-yaml file add MODEL_CONFIGURATION: branches: segmentation_head: 0
+
+yaml config file add MODEL_CONFIGURATION: branches: segmentation_head: 0
 
 change branch weight to add one more weight for segmentation loss
 
 data collection:
 
+Carla Gear:
+
+```
+sh CarlaUE4.sh /Game/Maps/Town01 -windowed -world-port=2000  -benchmark -fps=10
+```
+
 python collect.py --data-path /home/whizz/Desktop/coil-datasets/Carla100 --data-configuration-name coil_training_dataset
 
+
+
+python coiltraine.py --gpus 0 --single-process train -e resnet34imnet --folder carla100
