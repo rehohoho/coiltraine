@@ -101,7 +101,6 @@ class CoILDataset(Dataset):
             img_path = os.path.join(self.root_dir,
                                     self.sensor_data_names[index].split('/')[-2],
                                     self.sensor_data_names[index].split('/')[-1])
-
             img = cv2.imread(img_path, cv2.IMREAD_COLOR)
             # Apply the image transformation
             if self.transform is not None:
