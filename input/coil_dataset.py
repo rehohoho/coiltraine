@@ -437,7 +437,7 @@ class CoILDatasetWithSeg(CoILDataset):
 
     def __init__(self, root_dir, transform=None, preload_name=None):
         super().__init__(root_dir, transform, preload_name)
-        self.segmentation_n_class = 13 #https://carla.readthedocs.io/en/stable/cameras_and_sensors/#camera-semantic-segmentation
+        self.segmentation_n_class = 13 # https://carla.readthedocs.io/en/stable/cameras_and_sensors/#camera-semantic-segmentation
 
     def __getitem__(self, index):
         """

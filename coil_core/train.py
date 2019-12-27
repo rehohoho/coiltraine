@@ -3,6 +3,8 @@ import sys
 import random
 import time
 import traceback
+import numpy as np
+from skimage.color import label2rgb
 import torch
 import torch.optim as optim
 
@@ -191,9 +193,14 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                 #################################################
             """
             coil_logger.add_scalar('Loss', loss.data, iteration)
-            coil_logger.add_image('Image', torch.squeeze(data['rgb']), iteration)
+            rgb_image = torch.squeeze(data['rgb'])
+            coil_logger.add_image('Image', rgb_image, iteration)
             if use_seg_output:
-                coil_logger.add_image('Segmentation Output', torch.squeeze(branches[-1]), iteration)
+                segmentation_output = torch.squeeze(branches[-1])
+                segmentation_output = np.argmax(segmentation_output, axis=1) #TODO
+                segmentation_output = label2rgb(segmentation_output, image=rgb_image, colors=None, 
+                    alpha=0.3, bg_label=0, bg_color=(0, 0, 0), image_alpha=1, kind='overlay')
+                coil_logger.add_image('Segmentation Output', segmentation_output, iteration)
             if loss.data < best_loss:
                 best_loss = loss.data.tolist()
                 best_loss_iter = iteration
