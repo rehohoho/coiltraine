@@ -149,7 +149,6 @@ class CoILDataset(Dataset):
             img_path = os.path.join(self.root_dir,
                                     self.sensor_data_names[index].split('/')[-2],
                                     self.sensor_data_names[index].split('/')[-1])
-        print(img_path)
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         # Apply the image transformation
         if self.transform is not None:
@@ -458,7 +457,7 @@ class CoILDatasetWithSeg(CoILDataset):
             seg_ground_truth = np.zeros((self.segmentation_n_class, 88, 200))
             for i in range(self.segmentation_n_class):
                 seg_ground_truth[i] = single_channel_seg_img == i * 1 #boolean np array cast to int
-
+            seg_ground_truth = torch.from_numpy(seg_ground_truth).type(torch.FloatTensor)
             measurements = self.measurements[index].copy()
             for k, v in measurements.items():
                 v = torch.from_numpy(np.asarray([v, ]))

@@ -84,7 +84,7 @@ class CoILICRA(nn.Module):
 
         # Segmentation branch
         if 'segmentation_head' in params['branches'].keys() and params['branches']['segmentation_head']:
-            self.segmentation_branch = SegmentationBranch(n_class=number_output_neurons)
+            self.segmentation_branch = SegmentationBranch()
 
         # Create the fc vector separatedely
         branch_fc_vector = []

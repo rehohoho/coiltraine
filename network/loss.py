@@ -56,10 +56,9 @@ def branched_loss(loss_function, params):
     speed_loss = loss_branches_vec[4] / (params['branches'][0].shape[0])
     if params['use_seg_output']:
         seg_loss = loss_branches_vec[5] / (params['branches'][0].shape[0])
-        return torch.sum(loss_function) / (params['branches'][0].shape[0])\
-                    + torch.sum(speed_loss) / (params['branches'][0].shape[0]),\
-                    + torch.sum(seg_loss) / (params['branches'][0].shape[0]),\
-            plotable_params
+        return torch.sum(loss_function) / (params['branches'][0].shape[0]) +\
+               torch.sum(speed_loss) / (params['branches'][0].shape[0]) +\
+               torch.sum(seg_loss) / (params['branches'][0].shape[0]), plotable_params
     else:
         return torch.sum(loss_function) / (params['branches'][0].shape[0])\
                     + torch.sum(speed_loss) / (params['branches'][0].shape[0]),\
