@@ -12,7 +12,7 @@ import dlib
 
 from configs import g_conf, set_type_of_process, merge_with_yaml
 from network import CoILModel
-from input import CoILDataset, Augmenter
+from input import CoILDataset, CoILDatasetWithSeg, Augmenter
 from logger import coil_logger
 from coilutils.checkpoint_schedule import get_latest_evaluated_checkpoint, is_next_checkpoint_ready,\
     maximun_checkpoint_reach, get_next_checkpoint
@@ -53,6 +53,9 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
         merge_with_yaml(os.path.join('configs', exp_batch, exp_alias+'.yaml'))
         # The validation dataset is always fully loaded, so we fix a very high number of hours
         g_conf.NUMBER_OF_HOURS = 10000
+        # Toggle Segmentation Output
+        if use_seg_output:
+            g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] = 1
         set_type_of_process('validation', dataset_name)
 
         if not os.path.exists('_output_logs'):
@@ -74,8 +77,12 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
         full_dataset = os.path.join(os.environ["COIL_DATASET_PATH"], dataset_name)
         augmenter = Augmenter(None)
         # Definition of the dataset to be used. Preload name is just the validation data name
-        dataset = CoILDataset(full_dataset, transform=augmenter,
-                              preload_name=dataset_name)
+        if use_seg_output:
+            dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
+                preload_name=dataset_name)
+        else:
+            dataset = CoILDataset(full_dataset, transform=augmenter,
+                preload_name=dataset_name)
 
         # Creates the sampler, this part is responsible for managing the keys. It divides
         # all keys depending on the measurements and produces a set of keys for each bach.
