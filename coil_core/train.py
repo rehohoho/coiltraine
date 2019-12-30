@@ -196,11 +196,15 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             rgb_image = torch.squeeze(data['rgb'])
             coil_logger.add_image('Image', rgb_image, iteration)
             if use_seg_output:
-                segmentation_output = torch.squeeze(branches[-1])
-                segmentation_output = np.argmax(segmentation_output, axis=1) #TODO
-                segmentation_output = label2rgb(segmentation_output, image=rgb_image, colors=None, 
-                    alpha=0.3, bg_label=0, bg_color=(0, 0, 0), image_alpha=1, kind='overlay')
-                coil_logger.add_image('Segmentation Output', segmentation_output, iteration)
+                segmentation_output = torch.squeeze(branches[-1]).cpu().detach().numpy()
+                segmentation_output = np.argmax(segmentation_output, axis=1)
+                segmentation_rgb = np.zeros((segmentation_output.shape[0], segmentation_output.shape[1], 
+                    segmentation_output.shape[2], 3))
+                for i in range(segmentation_output.shape[0]):
+                    rgb_overlay = rgb_image[i].permute(1,2,0).cpu().detach().numpy()
+                    segmentation_rgb[i] = label2rgb(segmentation_output[i], image=rgb_overlay, colors=None, 
+                        alpha=0.3, bg_label=0, bg_color=(0, 0, 0), image_alpha=1, kind='overlay')
+                coil_logger.add_image('Segmentation Output', torch.from_numpy(segmentation_rgb), iteration)
             if loss.data < best_loss:
                 best_loss = loss.data.tolist()
                 best_loss_iter = iteration

@@ -266,7 +266,7 @@ def add_image(tag, images, iteration=None):
 
             images = images.view(-1, images.shape[1],
                                      images.shape[2],
-                                     images.shape[3])[:10].cpu().data.numpy()
+                                     images.shape[3])[:8].cpu().data.numpy()
 
 
             new_images = [] 
