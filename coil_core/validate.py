@@ -77,12 +77,8 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
         full_dataset = os.path.join(os.environ["COIL_DATASET_PATH"], dataset_name)
         augmenter = Augmenter(None)
         # Definition of the dataset to be used. Preload name is just the validation data name
-        if use_seg_output:
-            dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
-                preload_name=dataset_name)
-        else:
-            dataset = CoILDataset(full_dataset, transform=augmenter,
-                preload_name=dataset_name)
+        dataset = CoILDataset(full_dataset, transform=augmenter,
+            preload_name=dataset_name)
 
         # Creates the sampler, this part is responsible for managing the keys. It divides
         # all keys depending on the measurements and produces a set of keys for each bach.
