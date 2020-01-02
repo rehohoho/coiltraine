@@ -68,7 +68,7 @@ def execute_drive(gpu, exp_batch, exp_alias, exp_set_name, params, use_seg_outpu
     create_exp_path(exp_batch, exp_alias)
     p = multiprocessing.Process(target=run_drive.execute,
                                 args=(gpu, exp_batch, exp_alias, exp_set_name,
-                                      params))
+                                      params, use_seg_output))
 
     p.start()
 

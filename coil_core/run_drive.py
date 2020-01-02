@@ -153,7 +153,7 @@ def driving_benchmark(checkpoint_number, gpu, town_name, experiment_set, exp_bat
         exit(1)
 
 
-def execute(gpu, exp_batch, exp_alias, drive_conditions, params):
+def execute(gpu, exp_batch, exp_alias, drive_conditions, params, use_seg_output=False):
     """
     Main loop function. Executes driving benchmarks the specified iterations.
     Args:
@@ -174,7 +174,8 @@ def execute(gpu, exp_batch, exp_alias, drive_conditions, params):
             os.mkdir('_output_logs')
 
         merge_with_yaml(os.path.join('configs', exp_batch, exp_alias + '.yaml'))
-
+        if use_seg_output:
+            g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] = 1
         exp_set_name, town_name = drive_conditions.split('_')
 
         experiment_suite_module = __import__('drive.suites.' + camelcase_to_snakecase(exp_set_name)
