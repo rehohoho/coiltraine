@@ -11,7 +11,7 @@ from logger import printer, monitorer
 from . import train, validate, run_drive
 
 
-def execute_train(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12, use_seg_output=True):
+def execute_train(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12, use_seg_output=False):
     """
 
     Args:
@@ -29,7 +29,7 @@ def execute_train(gpu, exp_batch, exp_alias, suppress_output=True, number_of_wor
     p.start()
 
 
-def execute_validation(gpu, exp_batch, exp_alias, dataset, suppress_output=True, use_seg_output=True):
+def execute_validation(gpu, exp_batch, exp_alias, dataset, suppress_output=True, use_seg_output=False):
     """
 
     Args:
@@ -48,7 +48,7 @@ def execute_validation(gpu, exp_batch, exp_alias, dataset, suppress_output=True,
     p.start()
 
 
-def execute_drive(gpu, exp_batch, exp_alias, exp_set_name, params, use_seg_output=True): 
+def execute_drive(gpu, exp_batch, exp_alias, exp_set_name, params, use_seg_output=False): 
     # TODO display segmentation output during drive
     """
 

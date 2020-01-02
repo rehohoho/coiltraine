@@ -112,7 +112,6 @@ class CoILICRA(nn.Module):
     def forward(self, x, a):
         """ ###### APPLY THE PERCEPTION MODULE """
         x, inter = self.perception(x) # return x, [x0, x1, x2, x3, x4]  # output, intermediate
-        #TODO check inter layers, add segmentation head here
         
         ## Not a variable, just to store intermediate layers for future vizualization
         #self.intermediate_layers = inter

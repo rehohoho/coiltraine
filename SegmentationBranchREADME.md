@@ -20,3 +20,7 @@ python collect.py --data-path /home/whizz/Desktop/coil-datasets/Carla100 --data-
 python coiltraine.py --gpus 0 --single-process train -e resnet34imnet --folder carla100
 
 python coiltraine.py --gpus 0 --single-process train -e resnet34imnet --folder carla100 --use-seg-output
+
+Validation:
+
+python coiltraine.py --gpus 0 --single-process validation -e resnet34imnet --folder carla100 --val-datasets CoILVal1 --use-seg-output
