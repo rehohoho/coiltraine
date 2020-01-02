@@ -23,7 +23,6 @@ class SegmentationBranch(nn.Module):
 
     def forward(self, x):
         x0, x1, x2, x3, x4 = x
-        # This is taken from vgg19 so shape may not match
         score = self.bn1(self.relu(self.deconv1(x4)))     # size=(N, 512, x.H/16, x.W/16)
         score = score + x3                                # element-wise add, size=(N, 512, x.H/16, x.W/16)
         score = self.bn2(self.relu(self.deconv2(score)))  # size=(N, 256, x.H/8, x.W/8)
@@ -31,10 +30,7 @@ class SegmentationBranch(nn.Module):
         score = self.bn3(self.relu(self.deconv3(score)))  # size=(N, 128, x.H/4, x.W/4)
         score = score + x1                                # element-wise add, size=(N, 128, x.H/4, x.W/4)
         
-        #print('score shape: ', score.shape)
         score = self.bn4(self.relu(self.deconv4(score)))  # size=(N, 64, x.H/2, x.W/2)
-        #print('x1 shape: ', x1.shape)
-        #score = score + x0                                # element-wise add, size=(N, 64, x.H/2, x.W/2)
         score = self.bn5(self.relu(self.deconv5(score)))  # size=(N, 32, x.H, x.W)
         score = self.classifier(score)                    # size=(N, n_class, x.H/1, x.W/1)
 

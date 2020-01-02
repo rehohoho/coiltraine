@@ -1,5 +1,6 @@
 from torch.nn import functional as F
 import torch
+import torch.nn as nn
 
 
 def normalize(x, dim):
@@ -120,8 +121,9 @@ def l2_loss(params):
         # TODO: Activate or deactivate speed branch loss
         loss_branches_vec.append((params['branches'][-2] - params['inputs']) ** 2
                                 * params['branch_weights'][-2]) # speed branch
-        loss_branches_vec.append((params['branches'][-1] - params['seg_ground_truth']) ** 2
-                                * params['branch_weights'][-1]) # segment branch
+        seg_criterion = nn.BCEWithLogitsLoss()
+        loss_branches_vec.append(seg_criterion(params['branches'][-1], params['seg_ground_truth']) #seg loss
+                                * params['branch_weights'][-1])
     else:
         for i in range(len(params['branches']) - 1):
             loss_branches_vec.append(((params['branches'][i] - params['targets']) ** 2
@@ -159,12 +161,12 @@ def l1_loss(params):
                                     * params['branch_weights'][i])
         """The second last branch is a speed branch"""
         # TODO: Activate or deactivate speed branch loss
-        loss_branches_vec.append(torch.abs(params['branches'][-2] - params['inputs'])
+        loss_branches_vec.append(torch.abs(params['branches'][-2] - params['inputs']) #speed loss
                                 * params['branch_weights'][-2])
         #print(params['branches'][-1].shape)
         #print(params['seg_ground_truth'].shape)
-
-        loss_branches_vec.append(torch.abs(params['branches'][-1] - params['seg_ground_truth'])
+        seg_criterion = nn.BCEWithLogitsLoss()
+        loss_branches_vec.append(seg_criterion(params['branches'][-1], params['seg_ground_truth']) #seg loss
                                 * params['branch_weights'][-1])
         return loss_branches_vec, {}
     else:
