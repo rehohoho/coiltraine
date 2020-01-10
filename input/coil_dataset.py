@@ -617,3 +617,202 @@ class CoILDatasetWithWaypoints(CoILDataset):
                 mask[batch][valid_ind:] = 0
         
         return(mask)
+        
+        
+class CoILDatasetVis(CoILDataset):
+    
+    def __init__(self, root_dir, transform=None, preload_name=None):
+        super().__init__(root_dir, transform, preload_name)
+        
+        self.max_index = len(self.measurements)
+        self.incoherent_frame = -1
+        self.kinematic_measurements = ['location_x', 'location_y',
+                                        'velocity_x', 'velocity_y',
+                                        'acceleration_x', 'acceleration_y',
+                                        'speed_module', 'steer', 'throttle', 'brake',
+                                        'yaw', 'pitch']
+
+    def _pre_load_image_folders(self, path):
+        """
+        Pre load the image folders for each episode, keep in mind that we only take
+        the measurements that we think that are interesting for now.
+
+        Args
+            the path for the dataset
+
+        Returns
+            sensor data names: it is a vector with n dimensions being one for each sensor modality
+            for instance, rgb only dataset will have a single vector with all the image names.
+            float_data: all the wanted float data is loaded inside a vector, that is a vector
+            of dictionaries.
+
+        """
+
+        episodes_list = glob.glob(os.path.join(path, 'episode_*'))
+        sort_nicely(episodes_list)
+        # Do a check if the episodes list is empty
+        if len(episodes_list) == 0:
+            raise ValueError("There are no episodes on the training dataset folder %s" % path)
+
+        sensor_data_names = []
+        float_dicts = []
+
+        number_of_hours_pre_loaded = 0
+
+        if len(glob.glob(os.path.join(path, '**', 'CameraRGB_*'))) > 0:
+            center_prefix, left_prefix, right_prefix = 'CameraRGB_', 'LeftAugmentationCameraRGB_', 'RightAugmentationCameraRGB_'
+        else:
+            center_prefix, left_prefix, right_prefix = 'CentralRGB_', 'LeftRGB_', 'RightRGB_'
+        
+        print(center_prefix, left_prefix, right_prefix)
+
+        # Now we do a check to try to find all the
+        for episode in episodes_list:
+
+            print('Episode ', episode)
+
+            available_measurements_dict = data_parser.check_available_measurements(episode)
+            kinematics_measurements_dict = data_parser.check_kinematic_measurements(episode)
+            print(available_measurements_dict)
+            print(kinematics_measurements_dict)
+
+            if number_of_hours_pre_loaded > g_conf.NUMBER_OF_HOURS:
+                # The number of wanted hours achieved
+                break
+
+            # Get all the measurements from this episode
+            measurements_list = glob.glob(os.path.join(episode, 'measurement*'))
+            sort_nicely(measurements_list)
+
+            if len(measurements_list) == 0:
+                print("EMPTY EPISODE")
+                continue
+
+            # A simple count to keep track how many measurements were added this episode.
+            count_added_measurements = 0
+
+            for measurement in measurements_list[:-3]:
+
+                data_point_number = measurement.split('_')[-1].split('.')[0]
+
+                with open(measurement) as f:
+                    measurement_data = json.load(f)
+                
+                # depending on the configuration file, we eliminated the kind of measurements
+                # that are not going to be used for this experiment
+                # We extract the interesting subset from the measurement dict
+
+                speed = data_parser.get_speed(measurement_data)
+
+                directions = measurement_data['directions']
+                final_measurement = self._get_final_measurement(speed, measurement_data, 0,
+                                                                directions,
+                                                                available_measurements_dict)
+                
+                # add acceleration xyz, velocity xyz, rotation yaw
+                for measurement, name_in_dataset in kinematics_measurements_dict.items():
+                    final_measurement.update({measurement: measurement_data[name_in_dataset]})
+                
+                if self.is_measurement_partof_experiment(final_measurement):
+                    float_dicts.append(final_measurement)
+                    rgb = center_prefix + data_point_number + '.png'
+                    sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
+                    count_added_measurements += 1
+                
+                # We do measurements for the left side camera
+                # We convert the speed to KM/h for the augmentation
+
+                # We extract the interesting subset from the measurement dict
+
+                # final_measurement = self._get_final_measurement(speed, measurement_data, -30.0,
+                #                                                 directions,
+                #                                                 available_measurements_dict)
+
+                # if self.is_measurement_partof_experiment(final_measurement):
+                #     float_dicts.append(final_measurement)
+                #     rgb = left_prefix + data_point_number + '.png'
+                #     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
+                #     count_added_measurements += 1
+
+                # # We do measurements augmentation for the right side cameras
+
+                # final_measurement = self._get_final_measurement(speed, measurement_data, 30.0,
+                #                                                 directions,
+                #                                                 available_measurements_dict)
+
+                # if self.is_measurement_partof_experiment(final_measurement):
+                #     float_dicts.append(final_measurement)
+                #     rgb = right_prefix + data_point_number + '.png'
+                #     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
+                #     count_added_measurements += 1
+
+            # Check how many hours were actually added
+
+            last_data_point_number = measurements_list[-4].split('_')[-1].split('.')[0]
+            number_of_hours_pre_loaded += (float(count_added_measurements / 10.0) / 3600.0)
+            print(" Loaded ", number_of_hours_pre_loaded, " hours of data")
+
+
+        # Make the path to save the pre loaded datasets
+        if not os.path.exists('_preloads'):
+            os.mkdir('_preloads')
+        # If there is a name we saved the preloaded data
+        if self.preload_name is not None:
+            np.save(os.path.join('_preloads', self.preload_name), [sensor_data_names, float_dicts])
+
+        return sensor_data_names, float_dicts
+    
+    def __getitem__(self, index):
+        """
+        Get item function used by the dataset loader
+        returns all the measurements with the desired image.
+        
+        g_conf.INPUTS = ['speed_module']
+        g_conf.TARGETS = ['steer%d', 'throttle%d', 'brake%d']
+
+        """
+        # TODO get ignore_map to consider end of dataset
+        # work around should dataset approaches the end
+        if (index + g_conf.NUMBER_OF_WAYPOINTS > self.max_index):
+            index = random.randint(0, self.max_index - g_conf.NUMBER_OF_WAYPOINTS)
+
+        try:
+            
+            img = self._read_img_at_idx(index, segmentation=False)  #load image from folder
+            
+            measurements = self.measurements[index].copy()          #get measurements from preloaded
+            for k, v in measurements.items():                       #turn them into tensors
+                    v = torch.from_numpy(np.asarray([v, ]))
+                    measurements[k] = v.float()
+            
+            measurements['rgb'] = img                               #save rgb tensor into measurements
+            
+            for m in self.kinematic_measurements:
+                del measurements[m]
+            
+            for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
+                
+                raw = self.measurements[index + waypoint].copy()
+                for k, v in raw.items():
+                    v = torch.from_numpy(np.asarray([v, ]))
+                    raw[k] = v.float()
+
+                for m in self.kinematic_measurements:
+                    measurements['%s%d' %(m, waypoint)] = raw[m]
+            
+            self.batch_read_number += 1
+
+        except AttributeError:
+            print ("Blank IMAGE")
+
+            measurements = self.measurements[0].copy()
+            for k, v in measurements.items():
+                v = torch.from_numpy(np.asarray([v, ]))
+                measurements[k] = v.float()
+            measurements['steer'] = 0.0
+            measurements['throttle'] = 0.0
+            measurements['brake'] = 0.0
+            measurements['rgb'] = np.zeros(3, 88, 200)
+            measurements['seg_ground_truth'] = np.zeros(self.segmentation_n_class, 88, 200)
+
+        return measurements

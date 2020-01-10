@@ -36,6 +36,44 @@ def get_speed(measurement_data):
         return 0
 
 
+def check_kinematic_measurements(episode):
+    measurements_list = glob.glob(os.path.join(episode, 'measurement*'))
+    # Open a sample measurement
+    with open(measurements_list[0]) as f:
+        measurement_data = json.load(f)
+
+    available_measurements = {}
+    for meas_name in measurement_data.keys():
+        
+        # Add location
+        if 'location_x' in meas_name and 'noise' not in meas_name:
+            available_measurements.update({'location_x': meas_name})
+        if 'location_y' in meas_name and 'noise' not in meas_name:
+            available_measurements.update({'location_y': meas_name})
+        
+        # Add velocity
+        if 'velocity_x' in meas_name and 'noise' not in meas_name:
+            available_measurements.update({'velocity_x': meas_name})
+        if 'velocity_y' in meas_name and 'noise' not in meas_name:
+            available_measurements.update({'velocity_y': meas_name})
+        
+        # Add acceleratoin
+        if 'acceleration_x' in meas_name and 'noise' not in meas_name:
+            available_measurements.update({'acceleration_x': meas_name})
+        if 'acceleration_y' in meas_name and 'noise' not in meas_name:
+            available_measurements.update({'acceleration_y': meas_name})
+        
+        # Add yaw
+        if 'rotation_yaw' in meas_name and 'noise' not in meas_name and 'hand' not in meas_name:
+            available_measurements.update({'yaw': meas_name})
+        if 'rotation_pitch' in meas_name and 'noise' not in meas_name and 'hand' not in meas_name:
+            available_measurements.update({'pitch': meas_name})
+
+        # add game time
+
+    return available_measurements
+
+
 def check_available_measurements(episode):
     """ Try to automatically check the measurements
         The ones named 'steer' are probably the steer for the vehicle
