@@ -32,11 +32,22 @@ except IndexError:
     pass
 
 
-
+def remove_waypoints_from_model(checkpoint):
+    
+    for i in range(4):
+        # print(checkpoint['state_dict']['branches.branched_modules.%d.layers.2.0.weight' %i].narrow(0,0,3).size() )
+        
+        branch_weight = 'branches.branched_modules.%d.layers.2.0.weight' %i
+        branch_bias = 'branches.branched_modules.%d.layers.2.0.bias' %i
+        checkpoint['state_dict'][branch_weight] = checkpoint['state_dict'][branch_weight].narrow(0,0,3)
+        checkpoint['state_dict'][branch_bias] = checkpoint['state_dict'][branch_bias].narrow(0,0,3)
+        
 
 class CoILAgent(object):
 
     def __init__(self, checkpoint, town_name, carla_version='0.84'):
+        
+        remove_waypoints_from_model(checkpoint)
 
         # Set the carla version that is going to be used by the interface
         self._carla_version = carla_version
