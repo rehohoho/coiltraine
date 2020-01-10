@@ -70,13 +70,13 @@ class CoILDataset(Dataset):
 
         if self.preload_name is not None and os.path.exists(
                 os.path.join('_preloads', self.preload_name + '.npy')):
-            print(" Loading from NPY ")
+            print("Loading from NPY ")
             self.sensor_data_names, self.measurements = np.load(
                 os.path.join('_preloads', self.preload_name + '.npy'))
             print(self.sensor_data_names)
         else:
+            print("Preloading data from %s" %root_dir)
             self.sensor_data_names, self.measurements = self._pre_load_image_folders(root_dir)
-
 
         print("preload Name ", self.preload_name)
 
@@ -150,6 +150,13 @@ class CoILDataset(Dataset):
                                     self.sensor_data_names[index].split('/')[-2],
                                     self.sensor_data_names[index].split('/')[-1])
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        
+        if img.shape != (88, 200, 3):
+            print(img_path, img.shape)
+
+        if img is None:
+            print('Invalid path %s passed to _read_img_at_idx' %img_path)
+
         # Apply the image transformation
         if self.transform is not None:
             boost = 1
@@ -226,10 +233,13 @@ class CoILDataset(Dataset):
 
         number_of_hours_pre_loaded = 0
 
-        if len(glob.glob(os.path.join(path, '**', '*CameraRGB_'))) > 0:
+        if len(glob.glob(os.path.join(path, '**', 'CameraRGB_*'))) > 0:
             center_prefix, left_prefix, right_prefix = 'CameraRGB_', 'LeftAugmentationCameraRGB_', 'RightAugmentationCameraRGB_'
         else:
             center_prefix, left_prefix, right_prefix = 'CentralRGB_', 'LeftRGB_', 'RightRGB_'
+        
+        print(center_prefix, left_prefix, right_prefix)
+
         # Now we do a check to try to find all the
         for episode in episodes_list:
 
@@ -480,27 +490,6 @@ class CoILDatasetWithSeg(CoILDataset):
             measurements['seg_ground_truth'] = np.zeros(self.segmentation_n_class, 88, 200)
 
         return measurements
-    """
-    def extract_targets(self, data):
-        
-        Method used to get to know which positions from the dataset are the targets
-        for this experiments
-        Args:
-            labels: the set of all float data got from the dataset
-
-        Returns:
-            the float data that is actually targets
-
-        Raises
-            value error when the configuration set targets that didn't exist in metadata
-        
-        targets_vec = []
-        for target_name in g_conf.TARGETS:
-            targets_vec.append(data[target_name])
-
-
-        return torch.cat(targets_vec, 1)
-    """
 
     def extract_seg_gt(self, data):
         """
@@ -509,3 +498,122 @@ class CoILDatasetWithSeg(CoILDataset):
         targets_vec = []
         targets_vec.append(data['seg_ground_truth'])
         return torch.cat(targets_vec, 1)
+
+
+class CoILDatasetWithWaypoints(CoILDataset):
+
+    def __init__(self, root_dir, transform=None, preload_name=None):
+        super().__init__(root_dir, transform, preload_name)
+        
+        self.max_index = len(self.measurements)
+        
+    def check_coherence(self, index):
+        """
+        Find frame that reaches end of data if exist
+        Find index of frame wehre episode is changed, return NUMBER_OF_WAYPOINTS if does not change
+
+        Args:
+            index:  index of self.measurements to be read
+        
+        Returns:
+            i:      index of frame where episode is changed
+
+        measurements: 0..9
+        maxindex = 10
+        index = 0 
+        """
+        
+        # end_frame = index + g_conf.NUMBER_OF_WAYPOINTS - self.max_index
+
+        episode = None
+        for i in range(g_conf.NUMBER_OF_WAYPOINTS):
+            curr_episode = self.sensor_data_names[index + i].split('/')[-2]
+            
+            if episode == None:         #track episode of first frame
+                episode = curr_episode
+            
+            if curr_episode != episode: #return frame where episode is different
+                return(i)
+        
+        return(i+1)
+
+    def __getitem__(self, index):
+        """
+        Get item function used by the dataset loader
+        returns all the measurements with the desired image.
+        
+        g_conf.INPUTS = ['speed_module']
+        g_conf.TARGETS = ['steer%d', 'throttle%d', 'brake%d']
+
+        """
+        # TODO get ignore_map to consider end of dataset
+        # work around should dataset approaches the end
+        if (index + g_conf.NUMBER_OF_WAYPOINTS > self.max_index):
+            index = random.randint(0, self.max_index - g_conf.NUMBER_OF_WAYPOINTS)
+
+        try:
+            
+            img = self._read_img_at_idx(index, segmentation=False)  #load image from folder
+            
+            measurements = self.measurements[index].copy()          #get measurements from preloaded
+            for k, v in measurements.items():                       #turn them into tensors
+                    v = torch.from_numpy(np.asarray([v, ]))
+                    measurements[k] = v.float()
+            
+            measurements['rgb'] = img                               #save rgb tensor into measurements
+            del measurements['steer']
+            del measurements['throttle']
+            del measurements['brake']
+            
+            for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
+                
+                raw = self.measurements[index + waypoint].copy()
+                for k, v in raw.items():
+                    v = torch.from_numpy(np.asarray([v, ]))
+                    raw[k] = v.float()
+
+                for target_key in g_conf.TARGET_KEYS:
+                    measurements['%s%d' %(target_key, waypoint)] = raw['%s' %target_key]
+            
+            #check for end of dataset, or episode break
+            measurements['incoherent'] = self.check_coherence(index)
+            
+            self.batch_read_number += 1
+
+        except AttributeError:
+            print ("Blank IMAGE")
+
+            measurements = self.measurements[0].copy()
+            for k, v in measurements.items():
+                v = torch.from_numpy(np.asarray([v, ]))
+                measurements[k] = v.float()
+            measurements['steer'] = 0.0
+            measurements['throttle'] = 0.0
+            measurements['brake'] = 0.0
+            measurements['rgb'] = np.zeros(3, 88, 200)
+            measurements['seg_ground_truth'] = np.zeros(self.segmentation_n_class, 88, 200)
+
+        return measurements
+    
+    def extract_ignore_waypoint_mask(self, data):
+        """
+        Ignore waypoints that are not in the same episode as first frame
+
+        Args:
+            data:   dict from pytorch data_loader (see _getitem_)
+        Returns:
+            mask:   2D tensor (g_conf.BATCH_SIZE, g_conf.TARGETS) containing 1 and 0
+        """
+        
+        sample_valid_len = data['incoherent'].tolist()
+        n_outputs = len(g_conf.TARGET_KEYS)
+        n_targets = len(g_conf.TARGETS)
+        
+        mask = torch.ones( [g_conf.BATCH_SIZE, n_targets] )
+        
+        for batch in range(g_conf.BATCH_SIZE):
+            valid_ind = sample_valid_len[batch] *n_outputs
+            if valid_ind != n_targets:
+                mask[batch][valid_ind:] = 0
+        
+        return(mask)

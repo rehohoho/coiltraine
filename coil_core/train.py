@@ -10,7 +10,7 @@ import torch.optim as optim
 
 from configs import g_conf, set_type_of_process, merge_with_yaml
 from network import CoILModel, Loss, adjust_learning_rate_auto
-from input import CoILDataset, CoILDatasetWithSeg, Augmenter, select_balancing_strategy
+from input import CoILDataset, CoILDatasetWithSeg, CoILDatasetWithWaypoints, Augmenter, select_balancing_strategy
 from logger import coil_logger
 from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_checkpoint, \
                                     check_loss_validation_stopped
@@ -102,7 +102,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                 preload_name=str(g_conf.NUMBER_OF_HOURS)
                     + 'hours_' + g_conf.TRAIN_DATASET_NAME)
         else: 
-            dataset = CoILDataset(full_dataset, transform=augmenter,
+            dataset = CoILDatasetWithWaypoints(full_dataset, transform=augmenter,
                 preload_name=str(g_conf.NUMBER_OF_HOURS)
                     + 'hours_' + g_conf.TRAIN_DATASET_NAME)
         print("Loaded dataset")
@@ -158,7 +158,8 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                 'inputs': dataset.extract_inputs(data).cuda(),
                 'branch_weights': g_conf.BRANCH_LOSS_WEIGHT,
                 'variable_weights': g_conf.VARIABLE_WEIGHT,
-                'use_seg_output': use_seg_output
+                'use_seg_output': use_seg_output,
+                'ignore': dataset.extract_ignore_waypoint_mask(data).cuda()
             }
             if use_seg_output:
                 loss_function_params['seg_ground_truth'] = dataset.extract_seg_gt(data).cuda()
