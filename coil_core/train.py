@@ -55,6 +55,12 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         print('Types of outputs: %s' %g_conf.TARGET_KEYS)
         print('All targets: %s' %g_conf.TARGETS)
 
+        # weighting loss for each waypoint
+        if g_conf.WAYPOINT_LOSS_WEIGHT == 'exponential':
+            g_conf.WAYPOINT_LOSS_WEIGHT = np.exp( np.arange(g_conf.NUMBER_OF_WAYPOINTS)*-1 )
+        else:
+            g_conf.WAYPOINT_LOSS_WEIGHT = np.ones( g_conf.NUMBER_OF_WAYPOINTS )
+
         set_type_of_process('train')
         # Set the process into loading status.
         coil_logger.add_message('Loading', {'GPU': gpu})

@@ -1,6 +1,7 @@
 from . import loss_functional as LF
 import torch
-
+from configs import g_conf
+import numpy as np
 
 def l1(params):
     return branched_loss(LF.l1_loss, params)
@@ -44,25 +45,38 @@ def branched_loss(loss_function, params):
     # Apply the variable weights
     # This is applied to all branches except the last one, that is the speed branch...
     # TODO This is hardcoded to have 4 branches not using speed.
+    
+    n_waypoints = g_conf.NUMBER_OF_WAYPOINTS
+    n_outputs = len(g_conf.TARGET_KEYS)
+    loss_branches_vec_len = n_outputs * n_waypoints
 
     for i in range(4):
-        loss_branches_vec[i] = loss_branches_vec[i][:, 0] * params['variable_weights']['Steer'] \
-                               + loss_branches_vec[i][:, 1] * params['variable_weights']['Gas'] \
-                               + loss_branches_vec[i][:, 2] * params['variable_weights']['Brake']
-
+        
+        for waypoint in range(n_waypoints):
+            waypoint_ind = waypoint*n_outputs
+            for output in range(n_outputs):
+                loss_branches_vec[i][:, waypoint_ind+output] = loss_branches_vec[i][:, waypoint_ind+output] \
+                                        * params['variable_weights'][g_conf.TARGET_KEYS[output]] \
+                                        * g_conf.WAYPOINT_LOSS_WEIGHT[waypoint]
+        
+        loss_branches_vec[i] *= params['ignore']
+        loss_branches_vec[i] = torch.sum(loss_branches_vec[i], dim=1)
+    
     loss_function = loss_branches_vec[0] + loss_branches_vec[1] + loss_branches_vec[2] + \
                     loss_branches_vec[3]
 
+    loss_function = loss_function/ np.sum(g_conf.WAYPOINT_LOSS_WEIGHT)     # adjust magnitiude of branch loss to be roughly comparable to speed loss
+
     speed_loss = loss_branches_vec[4] / (params['branches'][0].shape[0])
+    
+    loss = torch.sum(loss_function) / (params['branches'][0].shape[0])\
+        + torch.sum(speed_loss) / (params['branches'][0].shape[0])
+
     if params['use_seg_output']:
         seg_loss = loss_branches_vec[5] / (params['branches'][0].shape[0])
-        return torch.sum(loss_function) / (params['branches'][0].shape[0]) +\
-               torch.sum(speed_loss) / (params['branches'][0].shape[0]) +\
-               torch.sum(seg_loss) / (params['branches'][0].shape[0]), plotable_params
-    else:
-        return torch.sum(loss_function) / (params['branches'][0].shape[0])\
-                    + torch.sum(speed_loss) / (params['branches'][0].shape[0]),\
-            plotable_params
+        loss += torch.sum(seg_loss) / (params['branches'][0].shape[0])
+        
+    return loss, plotable_params
 
 
 def Loss(loss_name):

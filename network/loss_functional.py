@@ -163,8 +163,7 @@ def l1_loss(params):
         # TODO: Activate or deactivate speed branch loss
         loss_branches_vec.append(torch.abs(params['branches'][-2] - params['inputs']) #speed loss
                                 * params['branch_weights'][-2])
-        #print(params['branches'][-1].shape)
-        #print(params['seg_ground_truth'].shape)
+        
         seg_criterion = nn.BCEWithLogitsLoss()
         loss_branches_vec.append(seg_criterion(params['branches'][-1], params['seg_ground_truth']) #seg loss
                                 * params['branch_weights'][-1])

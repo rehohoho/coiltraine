@@ -29,6 +29,7 @@ _g_conf.MEASUREMENTS = {'float_data': (31)}
 _g_conf.TARGETS = ['steer', 'throttle', 'brake']
 _g_conf.TARGET_KEYS = []
 _g_conf.NUMBER_OF_WAYPOINTS = 1
+_g_conf.WAYPOINT_LOSS_WEIGHT = "exponential"
 _g_conf.INPUTS = ['speed_module']
 _g_conf.INTENTIONS = []
 _g_conf.BALANCE_DATA = True
