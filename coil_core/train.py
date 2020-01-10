@@ -40,6 +40,21 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         # At this point the log file with the correct naming is created.
         # You merge the yaml file with the global configuration structure.
         merge_with_yaml(os.path.join('configs', exp_batch, exp_alias + '.yaml'))
+        
+        # Change number of targets according to number of waypoints
+        g_conf.TARGET_KEYS = g_conf.TARGETS
+        targets = g_conf.TARGETS * g_conf.NUMBER_OF_WAYPOINTS
+        gconf_targets_len = len(g_conf.TARGETS)
+        targets_len = len(targets)
+        
+        for waypoint_ind in range(targets_len):
+            targets[waypoint_ind] += '%s' %(waypoint_ind // gconf_targets_len)
+        
+        g_conf.TARGETS = targets
+
+        print('Types of outputs: %s' %g_conf.TARGET_KEYS)
+        print('All targets: %s' %g_conf.TARGETS)
+
         set_type_of_process('train')
         # Set the process into loading status.
         coil_logger.add_message('Loading', {'GPU': gpu})
@@ -210,7 +225,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                 best_loss_iter = iteration
 
             # Log a random position
-            position = random.randint(0, len(data) - 1)
+            position = random.randint(0, g_conf.BATCH_SIZE-1)
 
             output = model.extract_branch(torch.stack(branches[0:4]), controls)
             error = torch.abs(output - dataset.extract_targets(data).cuda())
@@ -231,7 +246,9 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                                     iteration)
             loss_window.append(loss.data.tolist())
             coil_logger.write_on_error_csv('train', loss.data)
-            print("Iteration: %d  Loss: %f" % (iteration, loss.data))
+            
+            if iteration % 10 == 0:
+                print("Iteration: %d  Loss: %f" % (iteration, loss.data))
 
         coil_logger.add_message('Finished', {})
 

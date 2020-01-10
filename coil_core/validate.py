@@ -12,7 +12,7 @@ import dlib
 
 from configs import g_conf, set_type_of_process, merge_with_yaml
 from network import CoILModel
-from input import CoILDataset, CoILDatasetWithSeg, Augmenter
+from input import CoILDataset, CoILDatasetWithSeg, CoILDatasetWithWaypoints, Augmenter
 from logger import coil_logger
 from coilutils.checkpoint_schedule import get_latest_evaluated_checkpoint, is_next_checkpoint_ready,\
     maximun_checkpoint_reach, get_next_checkpoint
@@ -53,6 +53,22 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
         merge_with_yaml(os.path.join('configs', exp_batch, exp_alias+'.yaml'))
         # The validation dataset is always fully loaded, so we fix a very high number of hours
         g_conf.NUMBER_OF_HOURS = 10000
+        
+        #TODO remove hardcode for steer throttle and break prediction, read from yaml file
+        # Change number of targets according to number of waypoints
+        g_conf.TARGET_KEYS = g_conf.TARGETS
+        targets = g_conf.TARGETS * g_conf.NUMBER_OF_WAYPOINTS
+        gconf_targets_len = len(g_conf.TARGETS)
+        targets_len = len(targets)
+        
+        for waypoint_ind in range(targets_len):
+            targets[waypoint_ind] += '%s' %(waypoint_ind // gconf_targets_len)
+        
+        g_conf.TARGETS = targets
+
+        print(g_conf.TARGET_KEYS)
+        print(g_conf.TARGETS)
+        
         # Toggle Segmentation Output
         if use_seg_output:
             g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] = 1
@@ -77,8 +93,9 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
         full_dataset = os.path.join(os.environ["COIL_DATASET_PATH"], dataset_name)
         augmenter = Augmenter(None)
         # Definition of the dataset to be used. Preload name is just the validation data name
-        dataset = CoILDataset(full_dataset, transform=augmenter,
-            preload_name=dataset_name)
+        dataset = CoILDatasetWithWaypoints(full_dataset,
+                transform=augmenter,
+                preload_name=dataset_name)
 
         # Creates the sampler, this part is responsible for managing the keys. It divides
         # all keys depending on the measurements and produces a set of keys for each bach.
@@ -149,7 +166,7 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
 
                     coil_logger.add_message('Iterating',
                          {'Checkpoint': latest,
-                          'Iteration': (str(iteration_on_checkpoint*120)+'/'+str(len(dataset))),
+                          'Iteration': (str(iteration_on_checkpoint*g_conf.BATCH_SIZE)+'/'+str(len(dataset))),
                           'MeanError': mean_error,
                           'MSE': mse,
                           'Output': output[position].data.tolist(),
@@ -158,7 +175,9 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
                           'Inputs': dataset.extract_inputs(data)[position].data.tolist()},
                           latest)
                     iteration_on_checkpoint += 1
-                    print("Iteration %d  on Checkpoint %d : Error %f" % (iteration_on_checkpoint,
+                    
+                    if iteration_on_checkpoint % 10 == 0:
+                        print("Iteration %d  on Checkpoint %d : Error %f" % (iteration_on_checkpoint,
                                                                 checkpoint_iteration, mean_error))
 
                 """
