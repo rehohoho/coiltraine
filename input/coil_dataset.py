@@ -151,9 +151,6 @@ class CoILDataset(Dataset):
                                     self.sensor_data_names[index].split('/')[-1])
         img = cv2.imread(img_path, cv2.IMREAD_COLOR)
         
-        if img.shape != (88, 200, 3):
-            print(img_path, img.shape)
-
         if img is None:
             print('Invalid path %s passed to _read_img_at_idx' %img_path)
 
@@ -380,6 +377,31 @@ class CoILDataset(Dataset):
     def controls_position(self):
         return np.where(self.meta_data[:, 0] == b'control')[0][0]
 
+    def check_coherence(self, index):
+        """
+        Used when targets include multiple waypoints
+        Find index of frame where episode is changed, return NUMBER_OF_WAYPOINTS if does not change
+
+        Args:
+            index:  index of self.measurements to be read
+        
+        Returns:
+            i:      index of frame where episode is changed
+        """
+        
+        # end_frame = index + g_conf.NUMBER_OF_WAYPOINTS - self.max_index
+
+        episode = None
+        for i in range(g_conf.NUMBER_OF_WAYPOINTS):
+            curr_episode = self.sensor_data_names[index + i].split('/')[-2]
+            
+            if episode == None:         #track episode of first frame
+                episode = curr_episode
+            
+            if curr_episode != episode: #return frame where episode is different
+                return(i)
+        
+        return(i+1)
 
     """
         Methods to interact with the dataset attributes that are used for training.
@@ -442,12 +464,38 @@ class CoILDataset(Dataset):
 
         return torch.cat(inputs_vec, 1)
 
+    def extract_ignore_waypoint_mask(self, data):
+        """
+        Used when targets include multiple waypoints
+        Ignore waypoints that are not in the same episode as first frame
+
+        Args:
+            data:   dict from pytorch data_loader (see _getitem_)
+        Returns:
+            mask:   2D tensor (g_conf.BATCH_SIZE, g_conf.TARGETS) containing 1 and 0
+        """
+        
+        sample_valid_len = data['incoherent'].tolist()
+        n_outputs = len(g_conf.TARGET_KEYS)
+        n_targets = len(g_conf.TARGETS)
+        
+        mask = torch.ones( [g_conf.BATCH_SIZE, n_targets] )
+        
+        for batch in range(g_conf.BATCH_SIZE):
+            valid_ind = sample_valid_len[batch] *n_outputs
+            if valid_ind != n_targets:
+                mask[batch][valid_ind:] = 0
+        
+        return(mask)
+
 
 class CoILDatasetWithSeg(CoILDataset):
 
     def __init__(self, root_dir, transform=None, preload_name=None):
         super().__init__(root_dir, transform, preload_name)
+        
         self.segmentation_n_class = 13 # https://carla.readthedocs.io/en/stable/cameras_and_sensors/#camera-semantic-segmentation
+        self.max_index = len(self.measurements)
 
     def __getitem__(self, index):
         """
@@ -460,6 +508,11 @@ class CoILDatasetWithSeg(CoILDataset):
         Returns:
 
         """
+        # TODO get ignore_map to consider end of dataset
+        # work around should dataset approaches the end
+        if (index + g_conf.NUMBER_OF_WAYPOINTS > self.max_index):
+            index = random.randint(0, self.max_index - g_conf.NUMBER_OF_WAYPOINTS)
+        
         try:
             img = self._read_img_at_idx(index, segmentation=False)
 
@@ -468,6 +521,7 @@ class CoILDatasetWithSeg(CoILDataset):
             for i in range(self.segmentation_n_class):
                 seg_ground_truth[i] = single_channel_seg_img == i * 1 #boolean np array cast to int
             seg_ground_truth = torch.from_numpy(seg_ground_truth).type(torch.FloatTensor)
+            
             measurements = self.measurements[index].copy()
             for k, v in measurements.items():
                 v = torch.from_numpy(np.asarray([v, ]))
@@ -475,6 +529,24 @@ class CoILDatasetWithSeg(CoILDataset):
 
             measurements['rgb'] = img
             measurements['seg_ground_truth'] = seg_ground_truth
+            
+            del measurements['steer']
+            del measurements['throttle']
+            del measurements['brake']
+            
+            for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
+                
+                raw = self.measurements[index + waypoint].copy()
+                for k, v in raw.items():
+                    v = torch.from_numpy(np.asarray([v, ]))
+                    raw[k] = v.float()
+
+                for target_key in g_conf.TARGET_KEYS:
+                    measurements['%s%d' %(target_key, waypoint)] = raw['%s' %target_key]
+            
+            #check for end of dataset, or episode break
+            measurements['incoherent'] = self.check_coherence(index)
+            
             self.batch_read_number += 1
         except AttributeError:
             print ("Blank IMAGE")
@@ -507,36 +579,6 @@ class CoILDatasetWithWaypoints(CoILDataset):
         
         self.max_index = len(self.measurements)
         
-    def check_coherence(self, index):
-        """
-        Find frame that reaches end of data if exist
-        Find index of frame wehre episode is changed, return NUMBER_OF_WAYPOINTS if does not change
-
-        Args:
-            index:  index of self.measurements to be read
-        
-        Returns:
-            i:      index of frame where episode is changed
-
-        measurements: 0..9
-        maxindex = 10
-        index = 0 
-        """
-        
-        # end_frame = index + g_conf.NUMBER_OF_WAYPOINTS - self.max_index
-
-        episode = None
-        for i in range(g_conf.NUMBER_OF_WAYPOINTS):
-            curr_episode = self.sensor_data_names[index + i].split('/')[-2]
-            
-            if episode == None:         #track episode of first frame
-                episode = curr_episode
-            
-            if curr_episode != episode: #return frame where episode is different
-                return(i)
-        
-        return(i+1)
-
     def __getitem__(self, index):
         """
         Get item function used by the dataset loader
@@ -594,30 +636,7 @@ class CoILDatasetWithWaypoints(CoILDataset):
             measurements['seg_ground_truth'] = np.zeros(self.segmentation_n_class, 88, 200)
 
         return measurements
-    
-    def extract_ignore_waypoint_mask(self, data):
-        """
-        Ignore waypoints that are not in the same episode as first frame
-
-        Args:
-            data:   dict from pytorch data_loader (see _getitem_)
-        Returns:
-            mask:   2D tensor (g_conf.BATCH_SIZE, g_conf.TARGETS) containing 1 and 0
-        """
-        
-        sample_valid_len = data['incoherent'].tolist()
-        n_outputs = len(g_conf.TARGET_KEYS)
-        n_targets = len(g_conf.TARGETS)
-        
-        mask = torch.ones( [g_conf.BATCH_SIZE, n_targets] )
-        
-        for batch in range(g_conf.BATCH_SIZE):
-            valid_ind = sample_valid_len[batch] *n_outputs
-            if valid_ind != n_targets:
-                mask[batch][valid_ind:] = 0
-        
-        return(mask)
-        
+   
         
 class CoILDatasetVis(CoILDataset):
     
