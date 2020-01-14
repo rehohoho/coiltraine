@@ -96,7 +96,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000, replace_stride_with_dilation=None):
+    def __init__(self, block, layers, input_channels=3, num_classes=1000, replace_stride_with_dilation=None):
         self.inplanes = 64
         self.dilation = 1
         super(ResNet, self).__init__()
@@ -109,7 +109,7 @@ class ResNet(nn.Module):
             raise ValueError("replace_stride_with_dilation should be None "
                              "or a 3-element tuple, got {}".format(replace_stride_with_dilation))
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
+        self.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3,
                                bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
@@ -191,38 +191,42 @@ class ResNet(nn.Module):
         return all_layers
 
 
-def resnet18(pretrained=False, **kwargs):
+def resnet18(pretrained=False, input_channels=3, **kwargs):
     """Constructs a ResNet-18 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+    model = ResNet(BasicBlock, [2, 2, 2, 2], input_channels, **kwargs)
     if pretrained:
 
         model_dict = model_zoo.load_url(model_urls['resnet18'])
         # remove the fc layers
         del model_dict['fc.weight']
         del model_dict['fc.bias']
+        del model_dict['conv1.weight'] # remove first conv for early fusion
+
         state = model.state_dict()
         state.update(model_dict)
         model.load_state_dict(state)
     return model
 
 
-def resnet34(pretrained=False, **kwargs):
+def resnet34(pretrained=False, input_channels=3, **kwargs):
     """Constructs a ResNet-34 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+    model = ResNet(BasicBlock, [3, 4, 6, 3], input_channels, **kwargs)
     if pretrained:
 
         model_dict = model_zoo.load_url(model_urls['resnet34'])
         # remove the fc layers
         del model_dict['fc.weight']
         del model_dict['fc.bias']
+        del model_dict['conv1.weight'] # remove first conv for early fusion
+
         state = model.state_dict()
         state.update(model_dict)
         model.load_state_dict(state)
@@ -230,18 +234,20 @@ def resnet34(pretrained=False, **kwargs):
     return model
 
 
-def resnet50(pretrained=False, **kwargs):
+def resnet50(pretrained=False, input_channels=3, **kwargs):
     """Constructs a ResNet-50 model.
 
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 6, 3], input_channels, **kwargs)
     if pretrained:
         model_dict = model_zoo.load_url(model_urls['resnet50'])
         # remove the fc layers
         del model_dict['fc.weight']
         del model_dict['fc.bias']
+        del model_dict['conv1.weight'] # remove first conv for early fusion
+        
         state = model.state_dict()
         state.update(model_dict)
         model.load_state_dict(state)

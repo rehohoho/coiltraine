@@ -31,11 +31,14 @@ class Join(nn.Module):
 
     # TODO: iteration control should go inside the logger, somehow
 
-    def forward(self, x, m):
+    def forward(self, x, m, x_seg):
         # get only the speeds from measurement labels
 
         if self.mode == 'cat':
-            j = torch.cat((x, m), 1)
+            if x_seg is not None:
+                j = torch.cat((x, x_seg, m), 1)
+            else:
+                j = torch.cat((x, m), 1)
 
         else:
             raise ValueError("Mode to join networks not found")
@@ -63,6 +66,3 @@ class Join(nn.Module):
 
 
         # TODO: implement
-
-
-

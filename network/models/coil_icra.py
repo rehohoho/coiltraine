@@ -49,10 +49,16 @@ class CoILICRA(nn.Module):
             number_output_neurons = params['perception']['fc']['neurons'][-1]
 
         elif 'res' in params['perception']:  # pre defined residual networks
+            
+            input_channels = 3
+            if g_conf.MODEL_CONFIGURATION['seg_input']['activate'] and g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
+                input_channels = 4
+
             resnet_module = importlib.import_module('network.models.building_blocks.resnet')
             resnet_module = getattr(resnet_module, params['perception']['res']['name'])
             self.perception = resnet_module(pretrained=g_conf.PRE_TRAINED,
-                                             num_classes=params['perception']['res']['num_classes'])
+                                            input_channels=input_channels,
+                                            num_classes=params['perception']['res']['num_classes'])
 
             number_output_neurons = params['perception']['res']['num_classes']
 
@@ -65,11 +71,24 @@ class CoILICRA(nn.Module):
                                        'dropouts': params['measurements']['fc']['dropouts'],
                                        'end_layer': False})
 
+        # Add segmentation mask as input
+        if 'seg_input' in params.keys() and params['seg_input']['activate'] and params['seg_input']['type'] == 'MF':
+            resnet_module = importlib.import_module('network.models.building_blocks.resnet')
+            resnet_module = getattr(resnet_module, params['seg_input']['res']['name'])
+            self.seg_inputs = resnet_module(pretrained=g_conf.PRE_TRAINED,
+                                             num_classes=params['seg_input']['res']['num_classes'])
+
+            join_neurons = [params['measurements']['fc']['neurons'][-1] +
+                            params['seg_input']['res']['num_classes'] +
+                            number_output_neurons]
+        else:
+            join_neurons = [params['measurements']['fc']['neurons'][-1] +
+                            number_output_neurons]
+        
         self.join = Join(
             params={'after_process':
                          FC(params={'neurons':
-                                        [params['measurements']['fc']['neurons'][-1] +
-                                         number_output_neurons] +
+                                        join_neurons +
                                         params['join']['fc']['neurons'],
                                      'dropouts': params['join']['fc']['dropouts'],
                                      'end_layer': False}),
@@ -109,9 +128,31 @@ class CoILICRA(nn.Module):
                     nn.init.constant_(m.bias, 0.1)
 
 
-    def forward(self, x, a):
+    def forward(self, x, seg_x, a):
+        
+        """ ###### APPLY THE SEGMENTATION INPUT MODULE """
+        if seg_x is not None:
+            mask = torch.argmax( seg_x.transpose(1,2).transpose(2,3), 3 )
+            mask = mask.type(torch.cuda.FloatTensor)
+            mask = torch.unsqueeze(mask, -3)
+
+            if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'MF':
+                # pad with zeros to get 3 channels for pretrained resnet to be used
+                seg_x = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
+                seg_x, seg_inter = self.seg_inputs(seg_x)
+            elif g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
+                # add mask channel to rgb image
+                x = torch.cat( (x, mask), -3 )
+                seg_x = None
+            else:
+                seg_x = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
+
         """ ###### APPLY THE PERCEPTION MODULE """
-        x, inter = self.perception(x) # return x, [x0, x1, x2, x3, x4]  # output, intermediate
+        if x is not None:
+            x, inter = self.perception(x) # return x, [x0, x1, x2, x3, x4]  # output, intermediate
+        else:
+            x, inter = self.perception(seg_x)
+            seg_x = None
         
         ## Not a variable, just to store intermediate layers for future vizualization
         #self.intermediate_layers = inter
@@ -119,7 +160,7 @@ class CoILICRA(nn.Module):
         """ ###### APPLY THE MEASUREMENT MODULE """
         m = self.measurements(a)
         """ Join measurements and perception"""
-        j = self.join(x, m)
+        j = self.join(x, m, seg_x)
 
         branch_outputs = self.branches(j)
 
@@ -132,7 +173,7 @@ class CoILICRA(nn.Module):
         else:
             return branch_outputs + [speed_branch_output]
 
-    def forward_branch(self, x, a, branch_number):
+    def forward_branch(self, x, x_seg, a, branch_number):
         """
         DO a forward operation and return a single branch.
 
@@ -147,13 +188,14 @@ class CoILICRA(nn.Module):
         """
         # Convert to integer just in case .
         # TODO: take four branches, this is hardcoded
-        output_vec = torch.stack(self.forward(x, a)[0:4])
+        output_vec = torch.stack(self.forward(x, x_seg, a)[0:4])
 
         return self.extract_branch(output_vec, branch_number)
 
     def get_perception_layers(self, x):
         return self.perception.get_layers_features(x)
 
+    # used for generating output to logs
     def extract_branch(self, output_vec, branch_number):
 
         branch_number = command_number_to_index(branch_number)
