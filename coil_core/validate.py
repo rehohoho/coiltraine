@@ -43,7 +43,7 @@ def write_regular_output(iteration, output):
 
 
 # The main function maybe we could call it with a default name
-def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_output=False):
+def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
     latest = None
     try:
         # We set the visible cuda devices
@@ -54,7 +54,6 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output, use_seg_ou
         # The validation dataset is always fully loaded, so we fix a very high number of hours
         g_conf.NUMBER_OF_HOURS = 10000
         
-        #TODO remove hardcode for steer throttle and break prediction, read from yaml file
         # Change number of targets according to number of waypoints
         g_conf.TARGET_KEYS = g_conf.TARGETS
         targets = g_conf.TARGETS * g_conf.NUMBER_OF_WAYPOINTS

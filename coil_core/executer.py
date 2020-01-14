@@ -11,7 +11,7 @@ from logger import printer, monitorer
 from . import train, validate, run_drive
 
 
-def execute_train(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12, use_seg_output=False):
+def execute_train(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12):
     """
 
     Args:
@@ -25,11 +25,11 @@ def execute_train(gpu, exp_batch, exp_alias, suppress_output=True, number_of_wor
     """
     create_exp_path(exp_batch, exp_alias)
     p = multiprocessing.Process(target=train.execute,
-                                args=(gpu, exp_batch, exp_alias, suppress_output, number_of_workers, use_seg_output))
+                                args=(gpu, exp_batch, exp_alias, suppress_output, number_of_workers))
     p.start()
 
 
-def execute_validation(gpu, exp_batch, exp_alias, dataset, suppress_output=True, use_seg_output=False):
+def execute_validation(gpu, exp_batch, exp_alias, dataset, suppress_output=True):
     """
 
     Args:
@@ -44,11 +44,11 @@ def execute_validation(gpu, exp_batch, exp_alias, dataset, suppress_output=True,
     create_exp_path(exp_batch, exp_alias)
     # The difference between train and validation is the
     p = multiprocessing.Process(target=validate.execute,
-                                args=(gpu, exp_batch, exp_alias, dataset, suppress_output, use_seg_output))
+                                args=(gpu, exp_batch, exp_alias, dataset, suppress_output))
     p.start()
 
 
-def execute_drive(gpu, exp_batch, exp_alias, exp_set_name, params, use_seg_output=False): 
+def execute_drive(gpu, exp_batch, exp_alias, exp_set_name, params): 
     # TODO display segmentation output during drive
     """
 
@@ -68,7 +68,7 @@ def execute_drive(gpu, exp_batch, exp_alias, exp_set_name, params, use_seg_outpu
     create_exp_path(exp_batch, exp_alias)
     p = multiprocessing.Process(target=run_drive.execute,
                                 args=(gpu, exp_batch, exp_alias, exp_set_name,
-                                      params, use_seg_output))
+                                      params))
 
     p.start()
 

@@ -17,7 +17,7 @@ from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_che
 
 
 # The main function maybe we could call it with a default name
-def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12, use_seg_output=False):
+def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12):
     """
         The main training function. This functions loads the latest checkpoint
         for a given, exp_batch (folder) and exp_alias (experiment configuration).
