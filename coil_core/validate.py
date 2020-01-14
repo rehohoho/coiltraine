@@ -68,9 +68,9 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
         print(g_conf.TARGET_KEYS)
         print(g_conf.TARGETS)
         
-        # Toggle Segmentation Output
-        if use_seg_output:
-            g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] = 1
+        # checking for segmentation head not needed for inference
+        use_seg_input = g_conf.MODEL_CONFIGURATION['seg_input']['activate'] == 1
+
         set_type_of_process('validation', dataset_name)
 
         if not os.path.exists('_output_logs'):
@@ -92,9 +92,14 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
         full_dataset = os.path.join(os.environ["COIL_DATASET_PATH"], dataset_name)
         augmenter = Augmenter(None)
         # Definition of the dataset to be used. Preload name is just the validation data name
-        dataset = CoILDatasetWithWaypoints(full_dataset,
-                transform=augmenter,
-                preload_name=dataset_name)
+        if use_seg_input:
+            dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
+                    preload_name=str(g_conf.NUMBER_OF_HOURS)
+                    + 'hours_withseg_' + g_conf.TRAIN_DATASET_NAME)
+        else:
+            dataset = CoILDatasetWithWaypoints(full_dataset,
+                    transform=augmenter,
+                    preload_name=dataset_name)
 
         # Creates the sampler, this part is responsible for managing the keys. It divides
         # all keys depending on the measurements and produces a set of keys for each bach.
@@ -141,7 +146,14 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
 
                     # Compute the forward pass on a batch from  the validation dataset
                     controls = data['directions']
+                    
+                    if use_seg_input:   # Use segmentation input if required
+                        model_input_seg = dataset.extract_seg_gt(data).cuda()
+                    else:
+                        model_input_seg = None
+
                     output = model.forward_branch(torch.squeeze(data['rgb']).cuda(),
+                                                  model_input_seg,
                                                   dataset.extract_inputs(data).cuda(),
                                                   controls)
                     # It could be either waypoints or direct control

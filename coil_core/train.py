@@ -55,6 +55,20 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         print('Types of outputs: %s' %g_conf.TARGET_KEYS)
         print('All targets: %s' %g_conf.TARGETS)
 
+        use_seg_output = 'segmentation_head' in g_conf.MODEL_CONFIGURATION['branches'].keys() and \
+                        g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] == 1
+        use_seg_input = 'seg_input' in g_conf.MODEL_CONFIGURATION.keys() and \
+                        g_conf.MODEL_CONFIGURATION['seg_input']['activate'] == 1
+
+        # check for impossible model configurations
+        if use_seg_input and use_seg_output:
+            print('seg input or seg output, choose one pls')
+            return
+        fusion_type = g_conf.MODEL_CONFIGURATION['seg_input']['type']
+        if use_seg_input and fusion_type != 'EF' and fusion_type != 'MF' and fusion_type != 'SS':
+            print('invalid fusion type %s though seg_input is active. expect EF or MF or SS' %fusion_type)
+            return
+
         # weighting loss for each waypoint
         if g_conf.WAYPOINT_LOSS_WEIGHT == 'exponential':
             g_conf.WAYPOINT_LOSS_WEIGHT = np.exp( np.arange(g_conf.NUMBER_OF_WAYPOINTS)*-1 )
@@ -89,10 +103,6 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                                                  'checkpoints',
                                                  str(g_conf.PRELOAD_MODEL_CHECKPOINT)+'.pth'))
 
-        # Toggle Segmentation Output
-        if use_seg_output:
-            g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] = 1
-
         # Get the latest checkpoint to be loaded
         # returns none if there are no checkpoints saved for this model
         checkpoint_file = get_latest_saved_checkpoint()
@@ -118,10 +128,10 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
 
         # Instantiate the class used to read a dataset. The coil dataset generator
         # can be found
-        if use_seg_output:
+        if use_seg_output or use_seg_input:
             dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
                 preload_name=str(g_conf.NUMBER_OF_HOURS)
-                    + 'hours_' + g_conf.TRAIN_DATASET_NAME)
+                    + 'hours_withseg_' + g_conf.TRAIN_DATASET_NAME)
         else: 
             dataset = CoILDatasetWithWaypoints(full_dataset, transform=augmenter,
                 preload_name=str(g_conf.NUMBER_OF_HOURS)
@@ -170,8 +180,21 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             controls = data['directions']
             # The output(branches) is a list of 5 branches results, each branch is with size [120,3]
             model.zero_grad()
-            branches = model(torch.squeeze(data['rgb'].cuda()),
+
+            if fusion_type == 'SS':
+                model_input_img = None
+            else:
+                model_input_img = torch.squeeze(data['rgb'].cuda())
+                
+            if use_seg_input:
+                model_input_seg = dataset.extract_seg_gt(data).cuda()
+            else:
+                model_input_seg = None
+            
+            branches = model(model_input_img,
+                             model_input_seg,
                              dataset.extract_inputs(data).cuda())
+
             loss_function_params = {
                 'branches': branches,
                 'targets': dataset.extract_targets(data).cuda(),
@@ -182,7 +205,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                 'use_seg_output': use_seg_output,
                 'ignore': dataset.extract_ignore_waypoint_mask(data).cuda()
             }
-            if use_seg_output:
+            if use_seg_output and not use_seg_input:
                 loss_function_params['seg_ground_truth'] = dataset.extract_seg_gt(data).cuda()
             loss, _ = criterion(loss_function_params)
             loss.backward()
