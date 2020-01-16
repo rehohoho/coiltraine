@@ -51,7 +51,7 @@ class CoILICRA(nn.Module):
         elif 'res' in params['perception']:  # pre defined residual networks
             
             input_channels = 3
-            if g_conf.MODEL_CONFIGURATION['seg_input']['activate'] and g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
+            if 'seg_input' in g_conf.MODEL_CONFIGURATION.keys() and g_conf.MODEL_CONFIGURATION['seg_input']['activate'] and g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
                 input_channels = 4
 
             resnet_module = importlib.import_module('network.models.building_blocks.resnet')

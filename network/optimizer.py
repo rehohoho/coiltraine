@@ -35,7 +35,7 @@ def adjust_learning_rate_auto(optimizer, loss_window):
     decaylevel = g_conf.LEARNING_RATE_DECAY_LEVEL
     n = 1000
     start_point = 0
-    print ("Loss window ", loss_window)
+    # print ("Loss window ", loss_window)
     while n < len(loss_window):
         print ("Startpoint ", start_point, " N  ", n)
         steps_no_decrease = dlib.count_steps_without_decrease(loss_window[start_point:n])
