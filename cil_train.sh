@@ -29,8 +29,8 @@ python /home/whizz/Desktop/coiltraine/coiltraine.py \
     --gpus=0 \
     --single-process="train" \
     --folder="carla10_exp" \
-    --exp="seginput" \
-    --number-of-workers=4
+    --exp="control_1waypoint_CoILTrain" \
+    --number-of-workers=12
 
 
 
