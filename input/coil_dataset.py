@@ -392,16 +392,16 @@ class CoILDataset(Dataset):
         # end_frame = index + g_conf.NUMBER_OF_WAYPOINTS - self.max_index
 
         episode = None
-        for i in range(g_conf.NUMBER_OF_WAYPOINTS):
+        for i in range(0, g_conf.NUMBER_OF_WAYPOINTS*3, 3):     # for 3 cameras
             curr_episode = self.sensor_data_names[index + i].split('/')[-2]
             
             if episode == None:         #track episode of first frame
                 episode = curr_episode
             
             if curr_episode != episode: #return frame where episode is different
-                return(i)
+                return(i/3)
         
-        return(i+1)
+        return(i/3+1)
 
     """
         Methods to interact with the dataset attributes that are used for training.
@@ -484,7 +484,7 @@ class CoILDataset(Dataset):
         for batch in range(g_conf.BATCH_SIZE):
             valid_ind = sample_valid_len[batch] *n_outputs
             if valid_ind != n_targets:
-                mask[batch][valid_ind:] = 0
+                mask[batch][int(valid_ind):] = 0
         
         return(mask)
 
@@ -590,8 +590,12 @@ class CoILDatasetWithWaypoints(CoILDataset):
         """
         # TODO get ignore_map to consider end of dataset
         # work around should dataset approaches the end
-        if (index + g_conf.NUMBER_OF_WAYPOINTS > self.max_index):
-            index = random.randint(0, self.max_index - g_conf.NUMBER_OF_WAYPOINTS)
+
+        # index runs in the same order as the preload .npy file (right mid left)
+        # number of cameras is hardcoded at _pre_load_image_folders
+
+        if (index + g_conf.NUMBER_OF_WAYPOINTS*3 > self.max_index):
+            index = random.randint(0, self.max_index - g_conf.NUMBER_OF_WAYPOINTS*3)
 
         try:
             
@@ -608,12 +612,11 @@ class CoILDatasetWithWaypoints(CoILDataset):
             del measurements['brake']
             
             for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
-                
-                raw = self.measurements[index + waypoint].copy()
+                raw = self.measurements[index + 3*waypoint].copy()
                 for k, v in raw.items():
                     v = torch.from_numpy(np.asarray([v, ]))
                     raw[k] = v.float()
-
+                
                 for target_key in g_conf.TARGET_KEYS:
                     measurements['%s%d' %(target_key, waypoint)] = raw['%s' %target_key]
             
