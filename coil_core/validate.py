@@ -43,7 +43,7 @@ def write_regular_output(iteration, output):
 
 
 # The main function maybe we could call it with a default name
-def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
+def execute(gpu, exp_batch, exp_alias, dataset_length, dataset_name, suppress_output):
     latest = None
     try:
         # We set the visible cuda devices
@@ -52,7 +52,10 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
         # At this point the log file with the correct naming is created.
         merge_with_yaml(os.path.join('configs', exp_batch, exp_alias+'.yaml'))
         # The validation dataset is always fully loaded, so we fix a very high number of hours
-        g_conf.NUMBER_OF_HOURS = 10000
+        if dataset_length != -1:
+            g_conf.NUMBER_OF_HOURS = dataset_length
+        else:
+            g_conf.NUMBER_OF_HOURS = 1000
         
         # Change number of targets according to number of waypoints
         g_conf.TARGET_KEYS = g_conf.TARGETS
@@ -69,7 +72,8 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
         print(g_conf.TARGETS)
         
         # checking for segmentation head not needed for inference
-        use_seg_input = g_conf.MODEL_CONFIGURATION['seg_input']['activate'] == 1
+        use_seg_input = 'seg_input' in g_conf.MODEL_CONFIGURATION.keys() and \
+                        g_conf.MODEL_CONFIGURATION['seg_input']['activate'] == 1
 
         set_type_of_process('validation', dataset_name)
 
@@ -95,11 +99,11 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
         if use_seg_input:
             dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
                     preload_name=str(g_conf.NUMBER_OF_HOURS)
-                    + 'hours_withseg_' + g_conf.TRAIN_DATASET_NAME)
+                    + 'hours_withseg_' + dataset_name)
         else:
-            dataset = CoILDatasetWithWaypoints(full_dataset,
-                    transform=augmenter,
-                    preload_name=dataset_name)
+            dataset = CoILDatasetWithWaypoints(full_dataset, transform=augmenter,
+                    preload_name=str(g_conf.NUMBER_OF_HOURS)
+                    + 'hours_' + dataset_name)
 
         # Creates the sampler, this part is responsible for managing the keys. It divides
         # all keys depending on the measurements and produces a set of keys for each bach.
@@ -237,7 +241,7 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
             else:
 
                 latest = get_latest_evaluated_checkpoint()
-                time.sleep(1)
+                time.sleep(10)
 
                 coil_logger.add_message('Loading', {'Message': 'Waiting Checkpoint'})
                 print("Waiting for the next Validation")

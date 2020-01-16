@@ -31,6 +31,13 @@ if __name__ == '__main__':
         type=str
     )
     argparser.add_argument(
+        '-vl',
+        '--val-dataset-length',
+        dest='validation_dataset_length',
+        default=-1,
+        type=int
+    )
+    argparser.add_argument(
         '-vd',
         '--val-datasets',
         dest='validation_datasets',
@@ -150,7 +157,7 @@ if __name__ == '__main__':
                           suppress_output=False, number_of_workers=args.number_of_workers)
 
         elif args.single_process == 'validation':
-            execute_validation(gpu="0", exp_batch=args.folder, exp_alias=args.exp,
+            execute_validation(gpu="0", exp_batch=args.folder, exp_alias=args.exp, dataset_length=args.validation_dataset_length,
                                dataset=args.validation_datasets[0], suppress_output=False)
 
         elif args.single_process == 'drive':
