@@ -130,11 +130,11 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         # can be found
         if use_seg_output or use_seg_input:
             dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
-                preload_name=str(g_conf.NUMBER_OF_HOURS)
+                    preload_name=str(g_conf.NUMBER_OF_HOURS)
                     + 'hours_withseg_' + g_conf.TRAIN_DATASET_NAME)
         else: 
             dataset = CoILDatasetWithWaypoints(full_dataset, transform=augmenter,
-                preload_name=str(g_conf.NUMBER_OF_HOURS)
+                    preload_name=str(g_conf.NUMBER_OF_HOURS)
                     + 'hours_' + g_conf.TRAIN_DATASET_NAME)
         print("Loaded dataset")
 
@@ -173,6 +173,13 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             iteration += 1
             if iteration % 1000 == 0:
                 adjust_learning_rate_auto(optimizer, loss_window)
+
+                # log learning rate into tensorboard
+                for param_group in optimizer.param_groups:
+                    logged_lr = param_group['lr']
+                    break
+
+                coil_logger.add_scalar('Learning rate', logged_lr, iteration)
 
             # get the control commands from float_data, size = [120,1]
 
