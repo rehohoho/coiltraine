@@ -102,3 +102,12 @@ ENV/
 
 # pycharm
 .idea
+
+#ignore benchmarks and logs
+/_benchmarks_results
+/_logs
+/_output_logs
+/datasets
+/_preloads
+/configs
+dev
