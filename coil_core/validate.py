@@ -166,8 +166,8 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
 
                 checkpoint_average_mse = accumulated_mse/(len(data_loader))
                 checkpoint_average_error = accumulated_error/(len(data_loader))
-                coil_logger.add_scalar('Loss', checkpoint_average_mse, latest, True)
-                coil_logger.add_scalar('Error', checkpoint_average_error, latest, True)
+                coil_logger.add_scalar('MSE', checkpoint_average_mse, latest, True)
+                coil_logger.add_scalar('MAE', checkpoint_average_error, latest, True)
 
                 if checkpoint_average_mse < best_mse:
                     best_mse = checkpoint_average_mse
@@ -180,8 +180,8 @@ def execute(gpu, exp_batch, exp_alias, dataset_name, suppress_output):
                 coil_logger.add_message('Iterating',
                      {'Summary':
                          {
-                          'Error': checkpoint_average_error,
-                          'Loss': checkpoint_average_mse,
+                          'MAE': checkpoint_average_error,
+                          'MSE': checkpoint_average_mse,
                           'BestError': best_error,
                           'BestMSE': best_mse,
                           'BestMSECheckpoint': best_mse_iter,
