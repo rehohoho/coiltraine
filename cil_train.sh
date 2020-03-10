@@ -10,7 +10,7 @@
 
 
 export PYTHONPATH=$PYTHONPATH:/home/whizz/Desktop/coiltraine
-export COIL_DATASET_PATH="/home/whizz/Desktop/coil-datasets"
+export COIL_DATASET_PATH="/data/coil-datasets"
 echo "COIL_DATASET_PATH used: $COIL_DATASET_PATH"
 
 # SIZE OF DATASETS
@@ -29,7 +29,7 @@ python /home/whizz/Desktop/coiltraine/coiltraine.py \
     --gpus=0 \
     --single-process="train" \
     --folder="carla10_exp" \
-    --exp="control_1waypoint_CoILTrain" \
+    --exp="segmentation_only" \
     --number-of-workers=12
 
 

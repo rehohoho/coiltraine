@@ -16,6 +16,48 @@ from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_che
                                     check_loss_validation_stopped
 
 
+def _get_targets():
+
+    # Change number of targets according to number of waypoints
+    g_conf.TARGET_KEYS = g_conf.TARGETS
+    targets = g_conf.TARGETS * g_conf.NUMBER_OF_WAYPOINTS
+
+    for waypoint_ind in range(len(targets)):
+        targets[waypoint_ind] += '%s' %(waypoint_ind // len(g_conf.TARGETS))
+    
+    g_conf.TARGETS = targets
+
+    print('Types of outputs: %s' %g_conf.TARGET_KEYS)
+    print('All targets: %s' %g_conf.TARGETS)
+
+
+def _get_weights_for_target_losses():
+    # weighting loss for each waypoint
+    if g_conf.WAYPOINT_LOSS_WEIGHT == 'exponential':
+        g_conf.WAYPOINT_LOSS_WEIGHT = np.exp( np.arange(g_conf.NUMBER_OF_WAYPOINTS)*-1 )
+    else:
+        g_conf.WAYPOINT_LOSS_WEIGHT = np.ones( g_conf.NUMBER_OF_WAYPOINTS )
+
+
+def _get_model_configuration_flags():
+
+    use_seg_output = 'segmentation_head' in g_conf.MODEL_CONFIGURATION['branches'].keys() and \
+                    g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] == 1
+    use_seg_input = 'seg_input' in g_conf.MODEL_CONFIGURATION.keys() and \
+                    g_conf.MODEL_CONFIGURATION['seg_input']['activate'] == 1
+
+    # check for impossible model configurations
+    if use_seg_input and use_seg_output:
+        print('seg input or seg output, choose one pls')
+        exit()
+    fusion_type = g_conf.MODEL_CONFIGURATION['seg_input']['type']
+    if use_seg_input and fusion_type != 'EF' and fusion_type != 'MF' and fusion_type != 'SS':
+        print('invalid fusion type %s though seg_input is active. expect EF or MF or SS' %fusion_type)
+        exit()
+
+    return(fusion_type, use_seg_input, use_seg_output)
+
+
 # The main function maybe we could call it with a default name
 def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=12):
     """
@@ -41,39 +83,9 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         # You merge the yaml file with the global configuration structure.
         merge_with_yaml(os.path.join('configs', exp_batch, exp_alias + '.yaml'))
         
-        # Change number of targets according to number of waypoints
-        g_conf.TARGET_KEYS = g_conf.TARGETS
-        targets = g_conf.TARGETS * g_conf.NUMBER_OF_WAYPOINTS
-        gconf_targets_len = len(g_conf.TARGETS)
-        targets_len = len(targets)
-        
-        for waypoint_ind in range(targets_len):
-            targets[waypoint_ind] += '%s' %(waypoint_ind // gconf_targets_len)
-        
-        g_conf.TARGETS = targets
-
-        print('Types of outputs: %s' %g_conf.TARGET_KEYS)
-        print('All targets: %s' %g_conf.TARGETS)
-
-        use_seg_output = 'segmentation_head' in g_conf.MODEL_CONFIGURATION['branches'].keys() and \
-                        g_conf.MODEL_CONFIGURATION['branches']['segmentation_head'] == 1
-        use_seg_input = 'seg_input' in g_conf.MODEL_CONFIGURATION.keys() and \
-                        g_conf.MODEL_CONFIGURATION['seg_input']['activate'] == 1
-
-        # check for impossible model configurations
-        if use_seg_input and use_seg_output:
-            print('seg input or seg output, choose one pls')
-            return
-        fusion_type = g_conf.MODEL_CONFIGURATION['seg_input']['type']
-        if use_seg_input and fusion_type != 'EF' and fusion_type != 'MF' and fusion_type != 'SS':
-            print('invalid fusion type %s though seg_input is active. expect EF or MF or SS' %fusion_type)
-            return
-
-        # weighting loss for each waypoint
-        if g_conf.WAYPOINT_LOSS_WEIGHT == 'exponential':
-            g_conf.WAYPOINT_LOSS_WEIGHT = np.exp( np.arange(g_conf.NUMBER_OF_WAYPOINTS)*-1 )
-        else:
-            g_conf.WAYPOINT_LOSS_WEIGHT = np.ones( g_conf.NUMBER_OF_WAYPOINTS )
+        _get_targets()
+        _get_weights_for_target_losses()
+        fusion_type, use_seg_input, use_seg_output = _get_model_configuration_flags()
 
         set_type_of_process('train')
         # Set the process into loading status.

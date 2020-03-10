@@ -20,71 +20,19 @@ class CoILICRA(nn.Module):
         super(CoILICRA, self).__init__()
         self.params = params
 
-        number_first_layer_channels = 0
+        # if using 2 channel bin-mask only
+        if 'seg_input' in params.keys() and params['seg_input']['activate'] and params['seg_input']['ridable_class'] != -1:
+            params['seg_input']['n_classes'] = 2
 
-        for _, sizes in g_conf.SENSORS.items():
-            number_first_layer_channels += sizes[0] * g_conf.NUMBER_FRAMES_FUSION
-
-        # Get one item from the dict
-        sensor_input_shape = next(iter(g_conf.SENSORS.values()))
-        sensor_input_shape = [number_first_layer_channels, sensor_input_shape[1],
-                              sensor_input_shape[2]]
-
-        # For this case we check if the perception layer is of the type "conv"
-        if 'conv' in params['perception']:
-            perception_convs = Conv(params={'channels': [number_first_layer_channels] +
-                                                          params['perception']['conv']['channels'],
-                                            'kernels': params['perception']['conv']['kernels'],
-                                            'strides': params['perception']['conv']['strides'],
-                                            'dropouts': params['perception']['conv']['dropouts'],
-                                            'end_layer': True})
-
-            perception_fc = FC(params={'neurons': [perception_convs.get_conv_output(sensor_input_shape)]
-                                                  + params['perception']['fc']['neurons'],
-                                       'dropouts': params['perception']['fc']['dropouts'],
-                                       'end_layer': False})
-
-            self.perception = nn.Sequential(*[perception_convs, perception_fc])
-
-            number_output_neurons = params['perception']['fc']['neurons'][-1]
-
-        elif 'res' in params['perception']:  # pre defined residual networks
-            
-            input_channels = 3
-            if 'seg_input' in g_conf.MODEL_CONFIGURATION.keys() and g_conf.MODEL_CONFIGURATION['seg_input']['activate'] and g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
-                input_channels = 4
-
-            resnet_module = importlib.import_module('network.models.building_blocks.resnet')
-            resnet_module = getattr(resnet_module, params['perception']['res']['name'])
-            self.perception = resnet_module(pretrained=g_conf.PRE_TRAINED,
-                                            input_channels=input_channels,
-                                            num_classes=params['perception']['res']['num_classes'])
-
-            number_output_neurons = params['perception']['res']['num_classes']
-
-        else:
-
-            raise ValueError("invalid convolution layer type")
+        # handles SS and EF, conv and resnet
+        number_output_neurons = self._init_rgb_encoder(params)
+        # handles MF and no MF
+        join_neurons = self._init_seg_encoder(params, number_output_neurons)
 
         self.measurements = FC(params={'neurons': [len(g_conf.INPUTS)] +
                                                    params['measurements']['fc']['neurons'],
                                        'dropouts': params['measurements']['fc']['dropouts'],
                                        'end_layer': False})
-
-        # Add segmentation mask as input
-        if 'seg_input' in params.keys() and params['seg_input']['activate'] and params['seg_input']['type'] == 'MF':
-            resnet_module = importlib.import_module('network.models.building_blocks.resnet')
-            resnet_module = getattr(resnet_module, params['seg_input']['res']['name'])
-            self.seg_inputs = resnet_module(pretrained=g_conf.PRE_TRAINED,
-                                             num_classes=params['seg_input']['res']['num_classes'])
-
-            join_neurons = [params['measurements']['fc']['neurons'][-1] +
-                            params['seg_input']['res']['num_classes'] +
-                            number_output_neurons]
-        else:
-            join_neurons = [params['measurements']['fc']['neurons'][-1] +
-                            number_output_neurons]
-        
         self.join = Join(
             params={'after_process':
                          FC(params={'neurons':
@@ -95,13 +43,10 @@ class CoILICRA(nn.Module):
                      'mode': 'cat'
                     }
          )
-
         self.speed_branch = FC(params={'neurons': [params['join']['fc']['neurons'][-1]] +
                                                   params['speed_branch']['fc']['neurons'] + [1],
                                        'dropouts': params['speed_branch']['fc']['dropouts'] + [0.0],
                                        'end_layer': True})
-
-        # Segmentation branch
         if 'segmentation_head' in params['branches'].keys() and params['branches']['segmentation_head']:
             self.segmentation_branch = SegmentationBranch()
 
@@ -132,24 +77,38 @@ class CoILICRA(nn.Module):
         
         """ ###### APPLY THE SEGMENTATION INPUT MODULE """
         if seg_x is not None:
-            mask = torch.argmax( seg_x.transpose(1,2).transpose(2,3), 3 )
-            mask = mask.type(torch.cuda.FloatTensor)
-            mask = torch.unsqueeze(mask, -3)
+            
+            # TO GET SINGLE CHANNEL MASK
+            # mask = torch.argmax( seg_x.transpose(1,2).transpose(2,3), 3 )
+            # mask = mask.type(torch.cuda.FloatTensor)
+            # mask = torch.unsqueeze(mask, -3)
+            
+            if g_conf.MODEL_CONFIGURATION['seg_input']['ridable_class'] != -1:
+                # set mask to 2 channels only, ridable and non-ridable areas
+                ridable_class = g_conf.MODEL_CONFIGURATION['seg_input']['ridable_class']
+                ridable = seg_x[:, ridable_class]
+                non_ridable = seg_x.sum(dim = 1) - ridable
+                seg_x = torch.stack((ridable, non_ridable), dim = 1)
 
             if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'MF':
+                # CHANGING SINGLE CHANNEL MASK TO 3-CHANNEL
                 # pad with zeros to get 3 channels for pretrained resnet to be used
-                seg_x = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
-                seg_x, seg_inter = self.seg_inputs(seg_x)
-            elif g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
+                # seg_x = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
+
+                seg_x, seg_inter = self.seg_perception(seg_x)
+                
+                ## Not a variable, just to store intermediate layers for future vizualization
+                #self.seg_intermediate_layers = seg_inter
+                
+            if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
                 # add mask channel to rgb image
-                x = torch.cat( (x, mask), -3 )
+                x = torch.cat( (x, seg_x), -3 )
                 seg_x = None
-            else:
-                seg_x = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
 
         """ ###### APPLY THE PERCEPTION MODULE """
         if x is not None:
             x, inter = self.perception(x) # return x, [x0, x1, x2, x3, x4]  # output, intermediate
+        # only for SS
         else:
             x, inter = self.perception(seg_x)
             seg_x = None
@@ -173,6 +132,7 @@ class CoILICRA(nn.Module):
         else:
             return branch_outputs + [speed_branch_output]
 
+
     def forward_branch(self, x, x_seg, a, branch_number):
         """
         DO a forward operation and return a single branch.
@@ -192,8 +152,10 @@ class CoILICRA(nn.Module):
 
         return self.extract_branch(output_vec, branch_number)
 
+
     def get_perception_layers(self, x):
         return self.perception.get_layers_features(x)
+
 
     # used for generating output to logs
     def extract_branch(self, output_vec, branch_number):
@@ -211,3 +173,80 @@ class CoILICRA(nn.Module):
         return output_vec[branch_number[0], branch_number[1], :]
 
 
+    def _init_rgb_encoder(self, params):
+
+        number_first_layer_channels = 0
+
+        for _, sizes in g_conf.SENSORS.items():
+            number_first_layer_channels += sizes[0] * g_conf.NUMBER_FRAMES_FUSION
+
+        # Get one item from the dict
+        sensor_input_shape = next(iter(g_conf.SENSORS.values()))
+        sensor_input_shape = [number_first_layer_channels, sensor_input_shape[1],
+                              sensor_input_shape[2]]
+
+        # For this case we check if the perception layer is of the type "conv"
+        if 'conv' in params['perception']:
+            perception_convs = Conv(params={'channels': [number_first_layer_channels] +
+                                                          params['perception']['conv']['channels'],
+                                            'kernels': params['perception']['conv']['kernels'],
+                                            'strides': params['perception']['conv']['strides'],
+                                            'dropouts': params['perception']['conv']['dropouts'],
+                                            'end_layer': True})
+
+            perception_fc = FC(params={'neurons': [perception_convs.get_conv_output(sensor_input_shape)]
+                                                  + params['perception']['fc']['neurons'],
+                                       'dropouts': params['perception']['fc']['dropouts'],
+                                       'end_layer': False})
+
+            self.perception = nn.Sequential(*[perception_convs, perception_fc])
+
+            number_output_neurons = params['perception']['fc']['neurons'][-1]
+
+        elif 'res' in params['perception']:  # pre defined residual networks
+            
+            input_channels = 3  # RGB only
+            if 'seg_input' in params.keys() and params['seg_input']['activate']:
+                # RGB + binmask for n_classes
+                if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
+                    input_channels = 3 + params['seg_input']['n_classes']
+                # binmask for n_classes only
+                if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'SS':
+                    input_channels = params['seg_input']['n_classes']
+
+            resnet_module = importlib.import_module('network.models.building_blocks.resnet')
+            resnet_module = getattr(resnet_module, params['perception']['res']['name'])
+            self.perception = resnet_module(pretrained=g_conf.PRE_TRAINED,
+                                            input_channels=input_channels,
+                                            num_classes=params['perception']['res']['num_classes'])
+
+            number_output_neurons = params['perception']['res']['num_classes']
+
+        else:
+
+            raise ValueError("invalid convolution layer type")
+
+        return number_output_neurons
+    
+
+    def _init_seg_encoder(self, params, number_output_neurons):
+        
+        # Mid fusion appends segmentation encoded information onto rgb encoded information
+        if 'seg_input' in params.keys() and params['seg_input']['activate'] and params['seg_input']['type'] == 'MF':
+            input_channels = params['seg_input']['n_classes']
+
+            resnet_module = importlib.import_module('network.models.building_blocks.resnet')
+            resnet_module = getattr(resnet_module, params['seg_input']['res']['name'])
+            self.seg_perception = resnet_module(pretrained=g_conf.PRE_TRAINED,
+                                            input_channels=input_channels,
+                                            num_classes=params['seg_input']['res']['num_classes'])
+
+            join_neurons = [params['measurements']['fc']['neurons'][-1] +
+                            params['seg_input']['res']['num_classes'] +
+                            number_output_neurons]
+        else:
+            join_neurons = [params['measurements']['fc']['neurons'][-1] +
+                            number_output_neurons]
+        
+
+        return join_neurons
