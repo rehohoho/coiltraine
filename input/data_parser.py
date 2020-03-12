@@ -36,44 +36,64 @@ def get_speed(measurement_data):
         return 0
 
 
-def check_kinematic_measurements(episode):
+def find_full_keys_recursively(dictionary, parent = None):
+    for key, value in dictionary.items():
+        
+        if parent is not None:
+            full_key = '_'.join([parent, key])
+        else:
+            full_key = key
+        
+        if isinstance(value, dict):
+            yield (full_key, value)
+            yield from find_full_keys_recursively(value, parent = full_key)
+        else:
+            yield (full_key, value)
+
+
+def get_item_from_full_key(dictionary, key):
+    """ Get item from full key
+    Requirements: key names has to be joined by '_' (hardcoded)
+    """
+
+    full_key = key.split('_')
+    final_item = dictionary
+
+    for k in full_key:
+        if k not in final_item.keys():
+            print('Warning! %s is not found in measurements' %full_key)
+            return 0
+        final_item = final_item[k]
+    
+    return final_item
+
+
+def check_available_measurements_modular(episode, keys_to_retrieve):
+    """ Checks sample measurement for key
+    Requirements: key names has to be joined by '_' (hardcoded)
+    """
+    
     measurements_list = glob.glob(os.path.join(episode, 'measurement*'))
-    # Open a sample measurement
-    with open(measurements_list[0]) as f:
+    
+    with open(measurements_list[0]) as f:   # Open a sample measurement
         measurement_data = json.load(f)
-
+    
     available_measurements = {}
-    for meas_name in measurement_data.keys():
-        
-        # Add location
-        if 'location_x' in meas_name and 'noise' not in meas_name:
-            available_measurements.update({'location_x': meas_name})
-        if 'location_y' in meas_name and 'noise' not in meas_name:
-            available_measurements.update({'location_y': meas_name})
-        
-        # Add velocity
-        if 'velocity_x' in meas_name and 'noise' not in meas_name:
-            available_measurements.update({'velocity_x': meas_name})
-        if 'velocity_y' in meas_name and 'noise' not in meas_name:
-            available_measurements.update({'velocity_y': meas_name})
-        
-        # Add acceleratoin
-        if 'acceleration_x' in meas_name and 'noise' not in meas_name:
-            available_measurements.update({'acceleration_x': meas_name})
-        if 'acceleration_y' in meas_name and 'noise' not in meas_name:
-            available_measurements.update({'acceleration_y': meas_name})
-        
-        # Add yaw
-        if 'rotation_yaw' in meas_name and 'noise' not in meas_name and 'hand' not in meas_name:
-            available_measurements.update({'yaw': meas_name})
-        if 'rotation_pitch' in meas_name and 'noise' not in meas_name and 'hand' not in meas_name:
-            available_measurements.update({'pitch': meas_name})
+    for key, item in find_full_keys_recursively(measurement_data):
+        for tar_key in keys_to_retrieve:
+            if tar_key == key[-len(tar_key):] :
+                
+                # shortest path to desired metric precedes (eg. brake VS hand_brake)
+                if tar_key in available_measurements.keys() and \
+                    len(available_measurements[tar_key]) < len(key):
+                    continue
 
-        # add game time
+                available_measurements.update({tar_key: key})
 
     return available_measurements
 
 
+# deprecated
 def check_available_measurements(episode):
     """ Try to automatically check the measurements
         The ones named 'steer' are probably the steer for the vehicle

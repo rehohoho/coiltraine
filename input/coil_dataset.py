@@ -53,9 +53,11 @@ def get_episode_weather(episode):
 class CoILDataset(Dataset):
     """ The conditional imitation learning dataset"""
 
-    def __init__(self, root_dir, transform=None, preload_name=None):
+    def __init__(self, root_dir, transform=None, preload_name=None, available_measurements=None):
+        
         # Setting the root directory for this dataset
         self.root_dir = root_dir
+
         # We add to the preload name all the remove labels
         if g_conf.REMOVE is not None and g_conf.REMOVE is not "None":
             name, self._remove_params = parse_remove_configuration(g_conf.REMOVE)
@@ -75,6 +77,12 @@ class CoILDataset(Dataset):
                 os.path.join('_preloads', self.preload_name + '.npy'))
             print(self.sensor_data_names)
         else:
+            
+            if available_measurements == None:
+                self.available_measurements = ['steer', 'throttle', 'brake']
+            else:
+                self.available_measurements = available_measurements
+
             print("Preloading data from %s" %root_dir)
             self.sensor_data_names, self.measurements = self._pre_load_image_folders(root_dir)
 
@@ -194,7 +202,9 @@ class CoILDataset(Dataset):
         # and update for the measurements vec that is used on the training.
         for measurement, name_in_dataset in avaliable_measurements_dict.items():
             # This is mapping the name of measurement in the target dataset
-            final_measurement.update({measurement: measurement_augmented[name_in_dataset]})
+            final_measurement.update({measurement:
+                data_parser.get_item_from_full_key(measurement_data, name_in_dataset)
+            })
 
         # Add now the measurements that actually need some kind of processing
         final_measurement.update({'speed_module': speed / g_conf.SPEED_FACTOR})
@@ -237,26 +247,26 @@ class CoILDataset(Dataset):
         
         print(center_prefix, left_prefix, right_prefix)
 
-        # Now we do a check to try to find all the
         for episode in episodes_list:
 
             print('Episode ', episode)
 
-            available_measurements_dict = data_parser.check_available_measurements(episode)
+            # Check in sample measurements json for desired metrics specified in init
+            available_measurements_dict = data_parser.check_available_measurements_modular(episode, self.available_measurements)
+            if len(available_measurements_dict) != len(self.available_measurements):
+                print('Warning! Not all desired metrics found in measurements! %s not found!' 
+                %( [i for i in self.available_measurements if i not in available_measurements_dict.keys()] ))
 
-            if number_of_hours_pre_loaded > g_conf.NUMBER_OF_HOURS:
-                # The number of wanted hours achieved
+            if number_of_hours_pre_loaded > g_conf.NUMBER_OF_HOURS: # achieved number of desired hours
                 break
 
-            # Get all the measurements from this episode
+            # Get all measurements.json from this episode
             measurements_list = glob.glob(os.path.join(episode, 'measurement*'))
             sort_nicely(measurements_list)
-
             if len(measurements_list) == 0:
                 print("EMPTY EPISODE")
                 continue
 
-            # A simple count to keep track how many measurements were added this episode.
             count_added_measurements = 0
 
             for measurement in measurements_list[:-3]:
