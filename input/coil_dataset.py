@@ -19,9 +19,17 @@ from . import data_parser
 
 # TODO: Warning, maybe this does not need to be included everywhere.
 from configs import g_conf
-
 from coilutils.general import sort_nicely
 
+"""
+Hardcoded to read:
+    1) forwardSpeed (0.8.x) OR velocity_x, velocity_y, velocity_z (0.9.x)
+    2) gameTimestamp OR elapsed_seconds
+    3) directions
+
+Modify self.available_measurements and g_conf.REMOVE to read more measurements
+see parse_remove_configuration() for g_conf.REMOVE implementation
+"""
 
 
 def parse_remove_configuration(configuration):
@@ -106,20 +114,7 @@ class CoILDataset(Dataset):
 
         """
         try:
-            img_path = os.path.join(self.root_dir,
-                                    self.sensor_data_names[index].split('/')[-2],
-                                    self.sensor_data_names[index].split('/')[-1])
-            img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-            # Apply the image transformation
-            if self.transform is not None:
-                boost = 1
-                img = self.transform(self.batch_read_number * boost, img)
-            else:
-                img = img.transpose(2, 0, 1)
-
-            img = img.astype(np.float)
-            img = torch.from_numpy(img).type(torch.FloatTensor)
-            img = img / 255.
+            img = _read_img_at_idx(index)
 
             measurements = self.measurements[index].copy()
             for k, v in measurements.items():
@@ -185,6 +180,7 @@ class CoILDataset(Dataset):
             The final measurement dict
         """
         if angle != 0:
+            # We convert the speed to KM/h for the steer augmentation calculations
             measurement_augmented = self.augment_measurement(copy.copy(measurement_data), angle,
                                                              3.6 * speed,
                                                  steer_name=avaliable_measurements_dict['steer'])
@@ -231,6 +227,7 @@ class CoILDataset(Dataset):
 
         episodes_list = glob.glob(os.path.join(path, 'episode_*'))
         sort_nicely(episodes_list)
+
         # Do a check if the episodes list is empty
         if len(episodes_list) == 0:
             raise ValueError("There are no episodes on the training dataset folder %s" % path)
@@ -276,10 +273,8 @@ class CoILDataset(Dataset):
                 with open(measurement) as f:
                     measurement_data = json.load(f)
 
-                # depending on the configuration file, we eliminated the kind of measurements
-                # that are not going to be used for this experiment
-                # We extract the interesting subset from the measurement dict
-
+                # Only important metrics extracted, according to self.available_measurements and g_conf.REMOVE
+                # see parse_remove_configuration()
                 speed = data_parser.get_speed(measurement_data)
 
                 directions = measurement_data['directions']
@@ -293,11 +288,7 @@ class CoILDataset(Dataset):
                     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
                     count_added_measurements += 1
 
-                # We do measurements for the left side camera
-                # We convert the speed to KM/h for the augmentation
-
-                # We extract the interesting subset from the measurement dict
-
+                # We do measurements augmentation for the left side cameras
                 final_measurement = self._get_final_measurement(speed, measurement_data, -30.0,
                                                                 directions,
                                                                 available_measurements_dict)
@@ -309,7 +300,6 @@ class CoILDataset(Dataset):
                     count_added_measurements += 1
 
                 # We do measurements augmentation for the right side cameras
-
                 final_measurement = self._get_final_measurement(speed, measurement_data, 30.0,
                                                                 directions,
                                                                 available_measurements_dict)
@@ -321,7 +311,6 @@ class CoILDataset(Dataset):
                     count_added_measurements += 1
 
             # Check how many hours were actually added
-
             last_data_point_number = measurements_list[-4].split('_')[-1].split('.')[0]
             number_of_hours_pre_loaded += (float(count_added_measurements / 10.0) / 3600.0)
             print(" Loaded ", number_of_hours_pre_loaded, " hours of data")
@@ -540,9 +529,8 @@ class CoILDatasetWithSeg(CoILDataset):
             measurements['rgb'] = img
             measurements['seg_ground_truth'] = seg_ground_truth
             
-            del measurements['steer']
-            del measurements['throttle']
-            del measurements['brake']
+            for target_key in g_conf.TARGET_KEYS:
+                del measurements[target_key]
             
             for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
                 
@@ -613,13 +601,12 @@ class CoILDatasetWithWaypoints(CoILDataset):
             
             measurements = self.measurements[index].copy()          #get measurements from preloaded
             for k, v in measurements.items():                       #turn them into tensors
-                    v = torch.from_numpy(np.asarray([v, ]))
-                    measurements[k] = v.float()
+                v = torch.from_numpy(np.asarray([v, ]))
+                measurements[k] = v.float()
             
             measurements['rgb'] = img                               #save rgb tensor into measurements
-            del measurements['steer']
-            del measurements['throttle']
-            del measurements['brake']
+            for target_key in g_conf.TARGET_KEYS:
+                del measurements[target_key]
             
             for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
                 raw = self.measurements[index + 3*waypoint].copy()
@@ -683,23 +670,24 @@ class CoILDatasetWithPathing(CoILDataset):
             
             measurements = self.measurements[index].copy()          #get measurements from preloaded
             for k, v in measurements.items():                       #turn them into tensors
-                    v = torch.from_numpy(np.asarray([v, ]))
-                    measurements[k] = v.float()
+                v = torch.from_numpy(np.asarray([v, ]))
+                measurements[k] = v.float()
             
             measurements['rgb'] = img                               #save rgb tensor into measurements
-            
-            for m in self.kinematic_measurements:
-                del measurements[m]
+            for target_key in g_conf.TARGET_KEYS:
+                del measurements[target_key]
             
             for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
-                
-                raw = self.measurements[index + waypoint].copy()
+                raw = self.measurements[index + 3*waypoint].copy()
                 for k, v in raw.items():
                     v = torch.from_numpy(np.asarray([v, ]))
                     raw[k] = v.float()
-
-                for m in self.kinematic_measurements:
-                    measurements['%s%d' %(m, waypoint)] = raw[m]
+                
+                for target_key in g_conf.TARGET_KEYS:
+                    measurements['%s%d' %(target_key, waypoint)] = raw['%s' %target_key]
+            
+            #check for end of dataset, or episode break
+            measurements['incoherent'] = self.check_coherence(index)
             
             self.batch_read_number += 1
 
