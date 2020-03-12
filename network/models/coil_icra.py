@@ -73,74 +73,78 @@ class CoILICRA(nn.Module):
                     nn.init.constant_(m.bias, 0.1)
 
 
-    def forward(self, x, seg_x, a):
+    def forward(self, rgb, seg_mask, a):
         
         """ ###### APPLY THE SEGMENTATION INPUT MODULE """
-        if seg_x is not None:
+        # check for seg_mask to exist is done in main train script
+        if seg_mask is not None:
             
-            # TO GET SINGLE CHANNEL MASK
-            # mask = torch.argmax( seg_x.transpose(1,2).transpose(2,3), 3 )
+            # get single channel mask
+            # mask = torch.argmax( seg_mask.transpose(1,2).transpose(2,3), 3 )
             # mask = mask.type(torch.cuda.FloatTensor)
             # mask = torch.unsqueeze(mask, -3)
-            
+
             if g_conf.MODEL_CONFIGURATION['seg_input']['ridable_class'] != -1:
                 # set mask to 2 channels only, ridable and non-ridable areas
                 ridable_class = g_conf.MODEL_CONFIGURATION['seg_input']['ridable_class']
-                ridable = seg_x[:, ridable_class]
-                non_ridable = seg_x.sum(dim = 1) - ridable
-                seg_x = torch.stack((ridable, non_ridable), dim = 1)
+                ridable = seg_mask[:, ridable_class]
+                non_ridable = seg_mask.sum(dim = 1) - ridable
+                seg_mask = torch.stack((ridable, non_ridable), dim = 1)
 
             if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'MF':
-                # CHANGING SINGLE CHANNEL MASK TO 3-CHANNEL
-                # pad with zeros to get 3 channels for pretrained resnet to be used
-                # seg_x = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
-
-                seg_x, seg_inter = self.seg_perception(seg_x)
                 
-                ## Not a variable, just to store intermediate layers for future vizualization
-                #self.seg_intermediate_layers = seg_inter
+                # pad single channel to get three channels
+                # seg_mask = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
+
+                encoded_seg, seg_inter = self.seg_perception(seg_mask)
+                
+                # self.seg_intermediate_layers = seg_inter # intermediate layers for future vizualization
                 
             if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
                 # add mask channel to rgb image
-                x = torch.cat( (x, seg_x), -3 )
-                seg_x = None
+                rgb = torch.cat( (rgb, seg_mask), -3 )
 
         """ ###### APPLY THE PERCEPTION MODULE """
-        if x is not None:
-            x, inter = self.perception(x) # return x, [x0, x1, x2, x3, x4]  # output, intermediate
+        if rgb is not None:
+            encoded_rgb, inter = self.perception(rgb) # return x, [x0, x1, x2, x3, x4]
         # only for SS
         else:
-            x, inter = self.perception(seg_x)
-            seg_x = None
-        
-        ## Not a variable, just to store intermediate layers for future vizualization
-        #self.intermediate_layers = inter
+            encoded_rgb, inter = self.perception(encoded_seg)
+
+        # self.intermediate_layers = inter # intermediate layers for future vizualization
 
         """ ###### APPLY THE MEASUREMENT MODULE """
         m = self.measurements(a)
+        
         """ Join measurements and perception"""
-        j = self.join(x, m, seg_x)
+        if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'MF':
+            j = self.join(encoded_rgb, m, encoded_seg)
+        else:
+            j = self.join(encoded_rgb, m)
 
         branch_outputs = self.branches(j)
 
-        speed_branch_output = self.speed_branch(x)
+        speed_branch_output = self.speed_branch(encoded_rgb)
 
         # We concatenate speed with the rest.
+        branch_outputs += [speed_branch_output]
         if 'segmentation_head' in self.params['branches'].keys() and self.params['branches']['segmentation_head']:
             seg_map = self.segmentation_branch(inter)
-            return branch_outputs + [speed_branch_output, seg_map]
-        else:
-            return branch_outputs + [speed_branch_output]
+            branch_outputs += [seg_map]
+
+        # branch_outputs += [seg_mask]
+
+        return branch_outputs
 
 
-    def forward_branch(self, x, x_seg, a, branch_number):
+    def forward_branch(self, rgb, x_seg, a, branch_number):
         """
         DO a forward operation and return a single branch.
 
         Args:
-            x: the image input
-            a: speed measurement
-            branch_number: the branch number to be returned
+            rgb:            the image input
+            a:              speed measurement
+            branch_number:  the branch number to be returned
 
         Returns:
             the forward operation on the selected branch
@@ -148,13 +152,13 @@ class CoILICRA(nn.Module):
         """
         # Convert to integer just in case .
         # TODO: take four branches, this is hardcoded
-        output_vec = torch.stack(self.forward(x, x_seg, a)[0:4])
+        output_vec = torch.stack(self.forward(rgb, x_seg, a)[0:4])
 
         return self.extract_branch(output_vec, branch_number)
 
 
-    def get_perception_layers(self, x):
-        return self.perception.get_layers_features(x)
+    def get_perception_layers(self, rgb):
+        return self.perception.get_layers_features(rgb)
 
 
     # used for generating output to logs

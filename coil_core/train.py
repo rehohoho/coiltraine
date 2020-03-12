@@ -214,6 +214,10 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                              model_input_seg,
                              dataset.extract_inputs(data).cuda())
 
+            # OUTPUT PREPROCESSED SEGMASK TO TENSORBOARD FOR CHECKING
+            # seg_x = branches[-1]
+            # branches = branches[:-1]
+
             loss_function_params = {
                 'branches': branches,
                 'targets': dataset.extract_targets(data).cuda(),
@@ -258,6 +262,19 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             coil_logger.add_scalar('Loss', loss.data, iteration)
             rgb_image = torch.squeeze(data['rgb'])
             coil_logger.add_image('Image', rgb_image, iteration)
+
+            # OUTPUT PREPROCESSED SEGMASK TO TENSORBOARD FOR CHECKING
+            # if seg_x is not None:
+            #     segmentation_output = torch.squeeze(seg_x).cpu().detach().numpy()
+            #     segmentation_output = np.argmax(segmentation_output, axis=1)
+            #     segmentation_rgb = np.zeros((segmentation_output.shape[0], segmentation_output.shape[1], 
+            #         segmentation_output.shape[2], 3))
+            #     for i in range(segmentation_output.shape[0]):
+            #         rgb_overlay = rgb_image[i].permute(1,2,0).cpu().detach().numpy()
+            #         segmentation_rgb[i] = label2rgb(segmentation_output[i], image=rgb_overlay, colors=None, 
+            #             alpha=0.3, bg_label=0, bg_color=(0, 0, 0), image_alpha=1, kind='overlay')
+            #     coil_logger.add_image('SegX', torch.from_numpy(segmentation_rgb), iteration)
+            
             if use_seg_output:
                 segmentation_output = torch.squeeze(branches[-1]).cpu().detach().numpy()
                 segmentation_output = np.argmax(segmentation_output, axis=1)

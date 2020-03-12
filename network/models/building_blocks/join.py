@@ -31,7 +31,7 @@ class Join(nn.Module):
 
     # TODO: iteration control should go inside the logger, somehow
 
-    def forward(self, x, m, x_seg):
+    def forward(self, x, m, x_seg = None):
         # get only the speeds from measurement labels
 
         if self.mode == 'cat':
