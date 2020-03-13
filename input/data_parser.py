@@ -52,9 +52,15 @@ def find_full_keys_recursively(dictionary, parent = None):
 
 
 def get_item_from_full_key(dictionary, key):
-    """ Get item from full key
+    """ Get item from key if key exists
+    Get item from splitted key otherwise
     Requirements: key names has to be joined by '_' (hardcoded)
+
+    TODO: non-hacky solution is to do assign_by_full_key, current assignment uses name_in_dataloader
     """
+
+    if key in dictionary.keys():
+        return dictionary[key]
 
     full_key = key.split('_')
     final_item = dictionary

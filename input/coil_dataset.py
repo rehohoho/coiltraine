@@ -171,7 +171,7 @@ class CoILDataset(Dataset):
         return img
 
     def _get_final_measurement(self, speed, measurement_data, angle,
-                               directions, avaliable_measurements_dict):
+                               directions, available_measurements_dict):
         """
         Function to load the measurement with a certain angle and augmented direction.
         Also, it will choose if the brake is gona be present or if acceleration -1,1 is the default.
@@ -179,27 +179,24 @@ class CoILDataset(Dataset):
         Returns
             The final measurement dict
         """
-        if angle != 0:
-            # We convert the speed to KM/h for the steer augmentation calculations
-            measurement_augmented = self.augment_measurement(copy.copy(measurement_data), angle,
-                                                             3.6 * speed,
-                                                 steer_name=avaliable_measurements_dict['steer'])
-        else:
-            # We have to copy since it reference a file.
-            measurement_augmented = copy.copy(measurement_data)
 
+        # Checks for augmentation is done in augment_measurement
+        measurement_augmented = self.augment_measurement(copy.copy(measurement_data), angle,
+                                                        speed, available_measurements_dict)
+        
         if 'gameTimestamp' in measurement_augmented:
             time_stamp = measurement_augmented['gameTimestamp']
         else:
            time_stamp = measurement_augmented['elapsed_seconds']
 
         final_measurement = {}
+        
         # We go for every available measurement, previously tested
         # and update for the measurements vec that is used on the training.
-        for measurement, name_in_dataset in avaliable_measurements_dict.items():
+        for measurement, name_in_dataset in available_measurements_dict.items():
             # This is mapping the name of measurement in the target dataset
             final_measurement.update({measurement:
-                data_parser.get_item_from_full_key(measurement_data, name_in_dataset)
+                data_parser.get_item_from_full_key(measurement_augmented, name_in_dataset)
             })
 
         # Add now the measurements that actually need some kind of processing
@@ -363,14 +360,34 @@ class CoILDataset(Dataset):
         # print('Angle', camera_angle, ' Steer ', old_steer, ' speed ', speed, 'new steer', steer)
         return steer
 
-    def augment_measurement(self, measurements, angle, speed, steer_name='steer'):
+    # TODO remove hardcode for augmentation checks
+    def augment_measurement(self, measurements, angle, speed, available_measurements_dict):
         """
             Augment the steering of a measurement dict
+            steer: (-1.0, 1.0) proportion of max_steer (70 deg for default vehicle)
+            yaw: (0, 2pi), important to note that carla measurements are (-180, 180), anti-clockwise on xy-plane
 
+            Current assignment is by name_in_measurements file directly
+            Less hacky solution is to create assign_using_splitted_key
         """
-        new_steer = self.augment_steering(angle, measurements[steer_name],
-                                          speed)
-        measurements[steer_name] = new_steer
+
+        # Augments steering to correct error from camera angle, eg. -30 angle -> increase steer
+        # We convert the speed to KM/h for the steer augmentation calculations
+        if 'steer' in available_measurements_dict and angle != 0:
+            steer_name = available_measurements_dict['steer']
+            new_steer = self.augment_steering(angle, measurements[steer_name],
+                                          3.6 * speed)
+            measurements[steer_name] = new_steer
+
+        # Augments yaw to heading of camera, eg. -30 angle -> lower yaw
+        if 'rotation_yaw' in available_measurements_dict:
+            yaw_name = available_measurements_dict['rotation_yaw']
+            new_yaw = data_parser.get_item_from_full_key(measurements, yaw_name)
+            if angle != 0:
+                new_yaw += angle
+            new_yaw = new_yaw % 360 * math.pi/180
+            measurements[yaw_name] = new_yaw
+
         return measurements
 
     def controls_position(self):
