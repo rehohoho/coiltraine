@@ -423,7 +423,12 @@ class CoILDataset(Dataset):
         for target_name in g_conf.TARGETS:
             targets_vec.append(data[target_name])
 
-        return torch.cat(targets_vec, 1)
+        if len(targets_vec) > 1:
+            targets_vec = torch.cat(targets_vec, 1)
+        else:
+            targets_vec = torch.unsqueeze(targets_vec[0], dim = -1).type(torch.FloatTensor)
+        
+        return targets_vec
 
     def extract_inputs(self, data):
         """
@@ -500,12 +505,10 @@ class CoILDatasetWithSeg(CoILDataset):
         """
         Get item function used by the dataset loader
         returns all the measurements with the desired image.
-
-        Args:
-            index:
-
-        Returns:
-
+        
+        g_conf.INPUTS = ['speed_module']
+        g_conf.TARGETS = ['steer%d', 'throttle%d', 'brake%d']
+        get seg_ground_truth for calculation of loss at segmentation head
         """
         # TODO get ignore_map to consider end of dataset
         # work around should dataset approaches the end
@@ -642,7 +645,7 @@ class CoILDatasetWithPathing(CoILDataset):
     
     def __init__(self, root_dir, transform=None, preload_name=None):
         
-        self.available_measurements = ['location_x', 'location_y', 'steer', 'throttle', 'brake']
+        self.available_measurements = ['location_x', 'location_y', 'rotation_yaw']
         
         super().__init__(root_dir, transform, preload_name, 
                         available_measurements = self.available_measurements)
@@ -650,6 +653,8 @@ class CoILDatasetWithPathing(CoILDataset):
         self.max_index = len(self.measurements)
         self.incoherent_frame = -1
     
+    # def _distance_between_waypoint(index):
+
     def __getitem__(self, index):
         """
         Get item function used by the dataset loader
@@ -657,7 +662,6 @@ class CoILDatasetWithPathing(CoILDataset):
         
         g_conf.INPUTS = ['speed_module']
         g_conf.TARGETS = ['steer%d', 'throttle%d', 'brake%d']
-
         """
         # TODO get ignore_map to consider end of dataset
         # work around should dataset approaches the end
@@ -674,18 +678,39 @@ class CoILDatasetWithPathing(CoILDataset):
                 measurements[k] = v.float()
             
             measurements['rgb'] = img                               #save rgb tensor into measurements
-            for target_key in g_conf.TARGET_KEYS:
-                del measurements[target_key]
+            print(measurements['rotation_yaw'])
             
-            for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):      #get target values for waypoints
-                raw = self.measurements[index + 3*waypoint].copy()
-                for k, v in raw.items():
-                    v = torch.from_numpy(np.asarray([v, ]))
-                    raw[k] = v.float()
+            for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):
                 
-                for target_key in g_conf.TARGET_KEYS:
-                    measurements['%s%d' %(target_key, waypoint)] = raw['%s' %target_key]
-            
+                dist = 0
+                tar_index = index
+                episode_changed = False
+                local_x = measurements['location_x']
+                local_y = measurements['location_y']
+                
+                while dist < 25:
+                    
+                    tar_index += 3  # 3 due to 3 cameras, hardcoded at preload
+                    tar = self.measurements[tar_index]
+                    tar_x = tar['location_x']
+                    tar_y = tar['location_y']
+
+                    dist_x = tar_x - local_x
+                    dist_y = tar_y - local_y
+                    dist = dist_x * dist_x + dist_y * dist_y
+
+                    if dist > 10000:    #handle change in episode
+                        episode_changed = True
+
+                # measurements['rotation_yaw'] modified from (-180,180) to (0,2pi) in augment_measurements
+                if episode_changed:
+                    measurements['angle%d' %waypoint] = 0
+                else:
+                    tar_yaw = math.atan(dist_x/dist_y)
+                    if dist_y < 0:
+                        tar_yaw += math.pi
+                    measurements['angle%d' %waypoint] = tar_yaw - measurements['rotation_yaw']
+
             #check for end of dataset, or episode break
             measurements['incoherent'] = self.check_coherence(index)
             
