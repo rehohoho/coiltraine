@@ -49,11 +49,14 @@ def _get_model_configuration_flags():
 
     # check for impossible model configurations
     if use_seg_input and use_seg_output:
-        print('seg input or seg output, choose one pls')
+        print('\nInvalid model type: seg input or seg output, choose one pls')
         exit()
     fusion_type = g_conf.MODEL_CONFIGURATION['seg_input']['type']
     if use_seg_input and fusion_type != 'EF' and fusion_type != 'MF' and fusion_type != 'SS':
-        print('invalid fusion type %s though seg_input is active. expect EF or MF or SS' %fusion_type)
+        print('\nInvalid fusion type: %s even though seg_input is active. expect EF or MF or SS' %fusion_type)
+        exit()
+    if g_conf.USE_PATHING and ('steer' in g_conf.TARGET_KEYS or 'throttle' in g_conf.TARGET_KEYS):
+        print('\nInvalid target: USE_PATHING is true, pathing only uses angle, no steer, throttle or brake!')
         exit()
 
     return(fusion_type, use_seg_input, use_seg_output)

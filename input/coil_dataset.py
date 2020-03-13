@@ -744,12 +744,13 @@ class CoILDatasetWithPathing(CoILDataset):
             
             measurements['rgb'] = img                               #save rgb tensor into measurements
             
-            local_x = measurements['location_x']
-            local_y = measurements['location_y']
-            angle_diff = self._distance_between_waypoints(index, local_x, local_y, measurements['rotation_yaw'],
-                                                        stopping_dist = 25)
-            measurements['angle0'] = torch.from_numpy(np.asarray([angle_diff,])
-                                                ).type(torch.FloatTensor)
+            for i in range(len(g_conf.PATHING_SQDISTANCE)):
+                local_x = measurements['location_x']
+                local_y = measurements['location_y']
+                angle_diff = self._distance_between_waypoints(index, local_x, local_y, measurements['rotation_yaw'],
+                                                            stopping_dist = g_conf.PATHING_SQDISTANCE[i])
+                measurements['angle%d' %i] = torch.from_numpy(np.asarray([angle_diff,])
+                                                    ).type(torch.FloatTensor)
 
             #check for end of dataset, or episode break
             measurements['incoherent'] = self.check_coherence(index)

@@ -28,8 +28,6 @@ _g_conf.SENSORS = {'rgb': (3, 88, 200)}
 _g_conf.MEASUREMENTS = {'float_data': (31)}
 _g_conf.TARGETS = ['steer', 'throttle', 'brake']
 _g_conf.TARGET_KEYS = []
-_g_conf.NUMBER_OF_WAYPOINTS = 1
-_g_conf.WAYPOINT_LOSS_WEIGHT = "exponential"
 _g_conf.INPUTS = ['speed_module']
 _g_conf.INTENTIONS = []
 _g_conf.BALANCE_DATA = True
@@ -41,7 +39,11 @@ _g_conf.BATCH_SIZE = 120
 _g_conf.SPLIT = None
 _g_conf.REMOVE = None
 _g_conf.AUGMENTATION = None
+
+_g_conf.NUMBER_OF_WAYPOINTS = 1
+_g_conf.WAYPOINT_LOSS_WEIGHT = "exponential"
 _g_conf.USE_PATHING = False
+_g_conf.PATHING_SQDISTANCE = [25, 400]
 
 
 _g_conf.DATA_USED = 'all' #  central, all, sides,
