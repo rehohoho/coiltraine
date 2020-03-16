@@ -140,22 +140,27 @@ if __name__ == '__main__':
         # MODE 1: Single Process. Just execute a single experiment alias.
         ####
 
+        if len(args.gpus) != 1:
+            gpu = "0"
+        else:
+            gpu = args.gpus[0]
+        
         if args.exp is None:
             raise ValueError(" You should set the exp alias when using single process")
 
         create_exp_path(args.folder, args.exp)
 
         if args.single_process == 'train':
-            execute_train(gpu="0", exp_batch=args.folder, exp_alias=args.exp,
+            execute_train(gpu=gpu, exp_batch=args.folder, exp_alias=args.exp,
                           suppress_output=False, number_of_workers= args.number_of_workers)
 
         elif args.single_process == 'validation':
-            execute_validation(gpu="0", exp_batch=args.folder, exp_alias=args.exp,
+            execute_validation(gpu=gpu, exp_batch=args.folder, exp_alias=args.exp,
                                dataset=args.validation_datasets[0], suppress_output=False)
 
         elif args.single_process == 'drive':
             drive_params['suppress_output'] = False
-            execute_drive("0", args.folder, args.exp, list(args.driving_environments)[0], drive_params)
+            execute_drive(gpu, args.folder, args.exp, list(args.driving_environments)[0], drive_params)
 
         else:
             raise Exception("Invalid name for single process, chose from (train, validation, test)")
