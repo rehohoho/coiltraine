@@ -670,7 +670,55 @@ class CoILDatasetWithPathing(CoILDataset):
         self.max_index = len(self.measurements)
         self.incoherent_frame = -1
     
-    # def _distance_between_waypoint(index):
+    
+    def _distance_between_waypoints(self, index, 
+                                    local_x, local_y, local_yaw, 
+                                    stopping_dist):
+        dist = 0
+        tar_index = index
+        episode_changed = False
+        
+        while dist < stopping_dist:
+            
+            tar_index += 3      # 3 due to 3 cameras, hardcoded at preload
+
+            if tar_index >= self.max_index - 1:  # handle end of dataset
+                episode_changed = True
+                break
+            else:
+                tar = self.measurements[tar_index]
+                tar_x = tar['location_x']
+                tar_y = tar['location_y']
+
+                dist_x = tar_x - local_x
+                dist_y = tar_y - local_y
+                dist = dist_x * dist_x + dist_y * dist_y
+
+                if dist > 10000:            #handle change in episode
+                    episode_changed = True
+
+        # measurements['rotation_yaw'] modified from (-180,180) to (0,2pi) in augment_measurements
+        # anti-clockwise on xy plane positive (UE4 default), 0 is north heading
+        if episode_changed:
+            angle_diff = 0
+        else:
+            tar_yaw = -math.atan(dist_x/dist_y)
+            
+            if dist_y < 0:                      # compute for a unit circle
+                tar_yaw += math.pi
+            
+            tar_yaw %= (2 * math.pi)            # scale to (0, 2pi) similar to augment_measurements
+            
+            angle_diff = tar_yaw - local_yaw
+            
+            if abs(angle_diff) > 1.5*math.pi:   # handle crossing the north heading
+                if angle_diff > 0:
+                    angle_diff = angle_diff - 2*math.pi
+                else:
+                    angle_diff = angle_diff + 2*math.pi
+        
+        return angle_diff
+
 
     def __getitem__(self, index):
         """
@@ -695,38 +743,13 @@ class CoILDatasetWithPathing(CoILDataset):
                 measurements[k] = v.float()
             
             measurements['rgb'] = img                               #save rgb tensor into measurements
-            print(measurements['rotation_yaw'])
             
-            for waypoint in range(g_conf.NUMBER_OF_WAYPOINTS):
-                
-                dist = 0
-                tar_index = index
-                episode_changed = False
-                local_x = measurements['location_x']
-                local_y = measurements['location_y']
-                
-                while dist < 25:
-                    
-                    tar_index += 3  # 3 due to 3 cameras, hardcoded at preload
-                    tar = self.measurements[tar_index]
-                    tar_x = tar['location_x']
-                    tar_y = tar['location_y']
-
-                    dist_x = tar_x - local_x
-                    dist_y = tar_y - local_y
-                    dist = dist_x * dist_x + dist_y * dist_y
-
-                    if dist > 10000:    #handle change in episode
-                        episode_changed = True
-
-                # measurements['rotation_yaw'] modified from (-180,180) to (0,2pi) in augment_measurements
-                if episode_changed:
-                    measurements['angle%d' %waypoint] = 0
-                else:
-                    tar_yaw = math.atan(dist_x/dist_y)
-                    if dist_y < 0:
-                        tar_yaw += math.pi
-                    measurements['angle%d' %waypoint] = tar_yaw - measurements['rotation_yaw']
+            local_x = measurements['location_x']
+            local_y = measurements['location_y']
+            angle_diff = self._distance_between_waypoints(index, local_x, local_y, measurements['rotation_yaw'],
+                                                        stopping_dist = 25)
+            measurements['angle0'] = torch.from_numpy(np.asarray([angle_diff,])
+                                                ).type(torch.FloatTensor)
 
             #check for end of dataset, or episode break
             measurements['incoherent'] = self.check_coherence(index)
