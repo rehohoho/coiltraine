@@ -512,8 +512,9 @@ class CoILDataset(Dataset):
 
 class CoILDatasetWithSeg(CoILDataset):
 
-    def __init__(self, root_dir, transform=None, preload_name=None):
-        super().__init__(root_dir, transform, preload_name)
+    def __init__(self, root_dir, transform=None, preload_name=None, available_measurements=None):
+        super().__init__(root_dir, transform, preload_name,
+                        available_measurements = None)
         
         self.segmentation_n_class = 13 # https://carla.readthedocs.io/en/stable/cameras_and_sensors/#camera-semantic-segmentation
         self.max_index = len(self.measurements)
@@ -658,9 +659,9 @@ class CoILDatasetWithWaypoints(CoILDataset):
         return measurements
    
         
-class CoILDatasetWithPathing(CoILDataset):
+class CoILDatasetWithPathing(CoILDatasetWithSeg):
     
-    def __init__(self, root_dir, transform=None, preload_name=None):
+    def __init__(self, root_dir, use_seg_input, transform=None, preload_name=None):
         
         self.available_measurements = ['location_x', 'location_y', 'rotation_yaw']
         
@@ -669,6 +670,8 @@ class CoILDatasetWithPathing(CoILDataset):
         
         self.max_index = len(self.measurements)
         self.incoherent_frame = -1
+        self.use_seg_input = use_seg_input
+        self.segmentation_n_class = 13 # https://carla.readthedocs.io/en/stable/cameras_and_sensors/#camera-semantic-segmentation
     
     
     def _distance_between_waypoints(self, index, 
@@ -682,7 +685,7 @@ class CoILDatasetWithPathing(CoILDataset):
             
             tar_index += 3      # 3 due to 3 cameras, hardcoded at preload
 
-            if tar_index >= self.max_index - 1:  # handle end of dataset
+            if tar_index >= self.max_index - 4:  # handle end of dataset
                 episode_changed = True
                 break
             else:
@@ -741,8 +744,16 @@ class CoILDatasetWithPathing(CoILDataset):
             for k, v in measurements.items():                       #turn them into tensors
                 v = torch.from_numpy(np.asarray([v, ]))
                 measurements[k] = v.float()
-            
+
             measurements['rgb'] = img                               #save rgb tensor into measurements
+            
+            if self.use_seg_input:
+                single_channel_seg_img = self._read_img_at_idx(index, segmentation=True)[2]
+                seg_ground_truth = np.zeros((self.segmentation_n_class, 88, 200))
+                for i in range(self.segmentation_n_class):
+                    seg_ground_truth[i] = single_channel_seg_img == i * 1 #boolean np array cast to int
+                seg_ground_truth = torch.from_numpy(seg_ground_truth).type(torch.FloatTensor)
+                measurements['seg_ground_truth'] = seg_ground_truth
             
             for i in range(len(g_conf.PATHING_SQDISTANCE)):
                 local_x = measurements['location_x']
@@ -752,8 +763,8 @@ class CoILDatasetWithPathing(CoILDataset):
                 measurements['angle%d' %i] = torch.from_numpy(np.asarray([angle_diff,])
                                                     ).type(torch.FloatTensor)
 
-            #check for end of dataset, or episode break
-            measurements['incoherent'] = self.check_coherence(index)
+            #extract ignore waypoint mask cannot be used, since it observes future steps by time, not distance
+            measurements['incoherent'] = g_conf.NUMBER_OF_WAYPOINTS
             
             self.batch_read_number += 1
 

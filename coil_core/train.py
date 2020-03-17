@@ -179,14 +179,14 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
 
         # Instantiate the class used to read a dataset. The coil dataset generator
         # can be found
-        if use_seg_output or use_seg_input:
+        if g_conf.USE_PATHING:
+            dataset = CoILDatasetWithPathing(full_dataset, use_seg_input = use_seg_input, transform=augmenter,
+                    preload_name=str(g_conf.NUMBER_OF_HOURS)
+                    + 'hours_withpath_' + g_conf.TRAIN_DATASET_NAME)
+        elif use_seg_output or use_seg_input:
             dataset = CoILDatasetWithSeg(full_dataset, transform=augmenter,
                     preload_name=str(g_conf.NUMBER_OF_HOURS)
                     + 'hours_withseg_' + g_conf.TRAIN_DATASET_NAME)
-        elif g_conf.USE_PATHING:
-            dataset = CoILDatasetWithPathing(full_dataset, transform=augmenter,
-                    preload_name=str(g_conf.NUMBER_OF_HOURS)
-                    + 'hours_withpath_' + g_conf.TRAIN_DATASET_NAME)
         else: 
             dataset = CoILDatasetWithWaypoints(full_dataset, transform=augmenter,
                     preload_name=str(g_conf.NUMBER_OF_HOURS)
@@ -267,6 +267,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
                 'use_seg_output': use_seg_output,
                 'ignore': dataset.extract_ignore_waypoint_mask(data).cuda()
             }
+            # ONLY SEGHEAD USED FOR SEG GT TO BE USED IN LOSS CALCULATION
             if use_seg_output and not use_seg_input:
                 loss_function_params['seg_ground_truth'] = dataset.extract_seg_gt(data).cuda()
             loss, _ = criterion(loss_function_params)
