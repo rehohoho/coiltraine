@@ -4,7 +4,6 @@ import random
 import time
 import traceback
 import numpy as np
-from skimage.color import label2rgb
 import torch
 import torch.optim as optim
 
@@ -15,6 +14,23 @@ from input import CoILDatasetWithSeg, CoILDatasetWithWaypoints, CoILDatasetWithP
 from logger import coil_logger
 from coilutils.checkpoint_schedule import is_ready_to_save, get_latest_saved_checkpoint, \
                                     check_loss_validation_stopped
+
+
+carla_cm = np.array([
+    (  0,  0,  0),  #none
+    ( 70, 70, 70), #buildings
+    (190,153,153), #fences
+    (250,170,160), #other
+    (220, 20, 60), #pedestrains
+    (153,153,153), #poles
+    (157,234, 50), #road lines
+    (128, 64,128), #roads
+    (244, 35,232), #sidewalks
+    (107,142, 35), #vegetation
+    (  0,  0,142), #vehicles/car
+    (102,102,156), #walls
+    (220,220,  0)  #traffic signs
+], dtype = np.float32)
 
 
 def _get_targets():
@@ -51,15 +67,34 @@ def _get_model_configuration_flags():
     if use_seg_input and use_seg_output:
         print('\nInvalid model type: seg input or seg output, choose one pls')
         exit()
-    fusion_type = g_conf.MODEL_CONFIGURATION['seg_input']['type']
-    if use_seg_input and fusion_type != 'EF' and fusion_type != 'MF' and fusion_type != 'SS':
-        print('\nInvalid fusion type: %s even though seg_input is active. expect EF or MF or SS' %fusion_type)
-        exit()
-    if g_conf.USE_PATHING and ('steer' in g_conf.TARGET_KEYS or 'throttle' in g_conf.TARGET_KEYS):
-        print('\nInvalid target: USE_PATHING is true, pathing only uses angle, no steer, throttle or brake!')
-        exit()
+    
+    fusion_type = None
+
+    if 'seg_input' in g_conf.MODEL_CONFIGURATION.keys():
+        fusion_type = g_conf.MODEL_CONFIGURATION['seg_input']['type']
+        if use_seg_input and fusion_type != 'EF' and fusion_type != 'MF' and fusion_type != 'SS':
+            print('\nInvalid fusion type: %s even though seg_input is active. expect EF or MF or SS' %fusion_type)
+            exit()
+        if g_conf.USE_PATHING and ('steer' in g_conf.TARGET_KEYS or 'throttle' in g_conf.TARGET_KEYS):
+            print('\nInvalid target: USE_PATHING is true, pathing only uses angle, no steer, throttle or brake!')
+            exit()
 
     return(fusion_type, use_seg_input, use_seg_output)
+
+
+def _output_seg_mask_to_tensorboard(seg_mask_tensor, iteration, name, color_map=None):
+    
+    segmentation_output = torch.squeeze(seg_mask_tensor).cpu().detach().numpy()
+    segmentation_output = np.argmax(segmentation_output, axis=1)
+    
+    segmentation_rgb = np.zeros((segmentation_output.shape[0], segmentation_output.shape[1], 
+                       segmentation_output.shape[2], 3))
+
+    for i in range(segmentation_output.shape[0]):
+        segmentation_rgb[i] = color_map[segmentation_output[i]]
+    
+    # transpose is taken care of in coil logger
+    coil_logger.add_image(name, torch.from_numpy(segmentation_rgb).permute(0,3,1,2), iteration)
 
 
 # The main function maybe we could call it with a default name
@@ -218,13 +253,9 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             else:
                 model_input_seg = None
             
-            branches = model(model_input_img,
-                             model_input_seg,
-                             dataset.extract_inputs(data).cuda())
-
-            # OUTPUT PREPROCESSED SEGMASK TO TENSORBOARD FOR CHECKING
-            # seg_x = branches[-1]
-            # branches = branches[:-1]
+            branches, vis = model(model_input_img,
+                                model_input_seg,
+                                dataset.extract_inputs(data).cuda())
 
             loss_function_params = {
                 'branches': branches,
@@ -271,28 +302,12 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
             rgb_image = torch.squeeze(data['rgb'])
             coil_logger.add_image('Image', rgb_image, iteration)
 
-            # OUTPUT PREPROCESSED SEGMASK TO TENSORBOARD FOR CHECKING
-            # if seg_x is not None:
-            #     segmentation_output = torch.squeeze(seg_x).cpu().detach().numpy()
-            #     segmentation_output = np.argmax(segmentation_output, axis=1)
-            #     segmentation_rgb = np.zeros((segmentation_output.shape[0], segmentation_output.shape[1], 
-            #         segmentation_output.shape[2], 3))
-            #     for i in range(segmentation_output.shape[0]):
-            #         rgb_overlay = rgb_image[i].permute(1,2,0).cpu().detach().numpy()
-            #         segmentation_rgb[i] = label2rgb(segmentation_output[i], image=rgb_overlay, colors=None, 
-            #             alpha=0.3, bg_label=0, bg_color=(0, 0, 0), image_alpha=1, kind='overlay')
-            #     coil_logger.add_image('SegX', torch.from_numpy(segmentation_rgb), iteration)
-            
             if use_seg_output:
-                segmentation_output = torch.squeeze(branches[-1]).cpu().detach().numpy()
-                segmentation_output = np.argmax(segmentation_output, axis=1)
-                segmentation_rgb = np.zeros((segmentation_output.shape[0], segmentation_output.shape[1], 
-                    segmentation_output.shape[2], 3))
-                for i in range(segmentation_output.shape[0]):
-                    rgb_overlay = rgb_image[i].permute(1,2,0).cpu().detach().numpy()
-                    segmentation_rgb[i] = label2rgb(segmentation_output[i], image=rgb_overlay, colors=None, 
-                        alpha=0.3, bg_label=0, bg_color=(0, 0, 0), image_alpha=1, kind='overlay')
-                coil_logger.add_image('Segmentation Output', torch.from_numpy(segmentation_rgb), iteration)
+                _output_seg_mask_to_tensorboard(branches[-1], iteration, name = 'Segmentation Output', color_map = carla_cm)
+                vis = loss_function_params['seg_ground_truth']
+            if vis is not None:
+                _output_seg_mask_to_tensorboard(vis, iteration, name = 'Segmentation Input', color_map = carla_cm)
+            
             if loss.data < best_loss:
                 best_loss = loss.data.tolist()
                 best_loss_iter = iteration

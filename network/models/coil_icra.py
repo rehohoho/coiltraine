@@ -20,14 +20,12 @@ class CoILICRA(nn.Module):
         super(CoILICRA, self).__init__()
         self.params = params
 
-        # if using 2 channel bin-mask only
+        # if using 2 channel seg-bin-mask only
         if 'seg_input' in params.keys() and params['seg_input']['activate'] and params['seg_input']['ridable_class'] != -1:
             params['seg_input']['n_classes'] = 2
 
-        # handles SS and EF, conv and resnet
-        number_output_neurons = self._init_rgb_encoder(params)
-        # handles MF and no MF
-        join_neurons = self._init_seg_encoder(params, number_output_neurons)
+        number_output_neurons = self._init_rgb_encoder(params)  # handles different channel numbers for SS and EF
+        join_neurons = self._init_seg_encoder(params, number_output_neurons)    # handles MF if exists
 
         self.measurements = FC(params={'neurons': [len(g_conf.INPUTS)] +
                                                    params['measurements']['fc']['neurons'],
@@ -76,22 +74,21 @@ class CoILICRA(nn.Module):
     def forward(self, rgb, seg_mask, a):
         
         """ ###### APPLY THE SEGMENTATION INPUT MODULE """
-        # check for seg_mask to exist is done in main train script
-        if seg_mask is not None:
+        if seg_mask is not None:    # check for seg_mask to exist is done in main train script
             
             # get single channel mask
             # mask = torch.argmax( seg_mask.transpose(1,2).transpose(2,3), 3 )
             # mask = mask.type(torch.cuda.FloatTensor)
             # mask = torch.unsqueeze(mask, -3)
 
-            if g_conf.MODEL_CONFIGURATION['seg_input']['ridable_class'] != -1:
+            if self.params['seg_input']['ridable_class'] != -1:
                 # set mask to 2 channels only, ridable and non-ridable areas
-                ridable_class = g_conf.MODEL_CONFIGURATION['seg_input']['ridable_class']
+                ridable_class = self.params['seg_input']['ridable_class']
                 ridable = seg_mask[:, ridable_class]
                 non_ridable = seg_mask.sum(dim = 1) - ridable
                 seg_mask = torch.stack((ridable, non_ridable), dim = 1)
 
-            if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'MF':
+            if self.params['seg_input']['type'] == 'MF':
                 
                 # pad single channel to get three channels
                 # seg_mask = torch.nn.functional.pad( mask, pad = (0,0,0,0,0,2), value = 0)
@@ -100,16 +97,15 @@ class CoILICRA(nn.Module):
                 
                 # self.seg_intermediate_layers = seg_inter # intermediate layers for future vizualization
                 
-            if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
+            if self.params['seg_input']['type'] == 'EF':
                 # add mask channel to rgb image
                 rgb = torch.cat( (rgb, seg_mask), -3 )
 
         """ ###### APPLY THE PERCEPTION MODULE """
-        if rgb is not None:
+        if rgb is not None: # all configurations except SS
             encoded_rgb, inter = self.perception(rgb) # return x, [x0, x1, x2, x3, x4]
-        # only for SS
         else:
-            encoded_rgb, inter = self.perception(encoded_seg)
+            encoded_rgb, inter = self.perception(seg_mask)
 
         # self.intermediate_layers = inter # intermediate layers for future vizualization
 
@@ -117,7 +113,7 @@ class CoILICRA(nn.Module):
         m = self.measurements(a)
         
         """ Join measurements and perception"""
-        if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'MF':
+        if 'seg_input' in self.params.keys() and self.params['seg_input']['type'] == 'MF':
             j = self.join(encoded_rgb, m, encoded_seg)
         else:
             j = self.join(encoded_rgb, m)
@@ -132,9 +128,10 @@ class CoILICRA(nn.Module):
             seg_map = self.segmentation_branch(inter)
             branch_outputs += [seg_map]
 
-        # branch_outputs += [seg_mask]
-
-        return branch_outputs
+        if seg_mask is not None:
+            return (branch_outputs, seg_mask)
+        else:
+            return (branch_outputs, None)
 
 
     def forward_branch(self, rgb, x_seg, a, branch_number):
@@ -212,11 +209,13 @@ class CoILICRA(nn.Module):
             input_channels = 3  # RGB only
             if 'seg_input' in params.keys() and params['seg_input']['activate']:
                 # RGB + binmask for n_classes
-                if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'EF':
+                if self.params['seg_input']['type'] == 'EF':
                     input_channels = 3 + params['seg_input']['n_classes']
                 # binmask for n_classes only
-                if g_conf.MODEL_CONFIGURATION['seg_input']['type'] == 'SS':
+                if self.params['seg_input']['type'] == 'SS':
                     input_channels = params['seg_input']['n_classes']
+
+            print('RGB encoder uses %s channels' %input_channels)
 
             resnet_module = importlib.import_module('network.models.building_blocks.resnet')
             resnet_module = getattr(resnet_module, params['perception']['res']['name'])
