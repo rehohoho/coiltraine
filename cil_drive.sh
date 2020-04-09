@@ -13,9 +13,10 @@ python /home/whizz/Desktop/coiltraine/coiltraine.py \
     --exp="resnet34imnet10S2" \
     --drive-envs="NocrashNewWeatherTown_Town02" \
     --docker='carlagear' \
-    --host="172.18.0.2" \
+    --host="172.18.0.3" \
     --number-of-workers=24 \
     --verbose \
     --port=7000 \
-    --network_name="carlasimulator"
+    --network_name="carlasimulator" \
+    --container_name="carlatest1"
 

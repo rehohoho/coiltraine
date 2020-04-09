@@ -32,7 +32,7 @@ def find_free_port():
         return s.getsockname()[1]
 
 
-def start_carla_simulator(gpu, town_name, docker,host_ip, port,network_name):
+def start_carla_simulator(gpu, town_name, docker,host_ip, port,network_name,container_name):
     """
         Start a CARLA simulator, either by running a docker image or by running the binary
         directly. For that, the CARLA_PATH environment variable should be specified.
@@ -47,16 +47,20 @@ def start_carla_simulator(gpu, town_name, docker,host_ip, port,network_name):
 
 
     print("docker name used is "+ docker)
-
+    print("container name:{}".format(network_name))
     if network_name:
         print("docker runnning in network:{}".format(network_name))
-        sp = subprocess.Popen(['sudo', 'docker', 'run', '--rm','--net',network_name,'--ip',host_ip, '-d', '-p',
+        sp = subprocess.Popen(['sudo', 'docker', 'run', '--rm','--name',container_name,'--net',network_name,'--ip',host_ip, '-d', '-p',
                                str(port)+'-'+str(port+2)+':'+str(port)+'-'+str(port+2),
                                '--runtime=nvidia', '-e', 'NVIDIA_VISIBLE_DEVICES='+str(gpu), docker,
                                '/bin/bash', 'CarlaUE4.sh', '/Game/Maps/' + town_name, '-windowed',
                                '-benchmark', '-fps=10', '-world-port=' + str(port)], shell=False,
                                stdout=subprocess.PIPE)
 
+        print("sleeping for 5 seconds to wait for docker to launch")
+        time.sleep(1)
+        #need to attach container created to main bridge networks
+        subprocess.Popen(['sudo','docker','network','connect','bridge',container_name],shell=False,stdout=subprocess.PIPE)
     else:
         sp = subprocess.Popen(['sudo', 'docker', 'run', '--rm','--ip',host_ip, '-d', '-p',
                            str(port)+'-'+str(port+2)+':'+str(port)+'-'+str(port+2),
@@ -101,7 +105,8 @@ def driving_benchmark(checkpoint_number, gpu, town_name, experiment_set, exp_bat
     try:
         """ START CARLA"""
         carla_process, port, out = start_carla_simulator(gpu, town_name,
-                                                         params['docker'],params["host"],params["port"],params["network_name"])
+                                                         params['docker'],params["host"],params["port"],
+                                                         params["network_name"],params["container_name"])
 
         checkpoint = torch.load(os.path.join('_logs', exp_batch, exp_alias
                                              , 'checkpoints', str(checkpoint_number) + '.pth'))

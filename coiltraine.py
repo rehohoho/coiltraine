@@ -117,6 +117,12 @@ if __name__ == '__main__':
         default=None,
         help='sub network to launch the docker container in '
     )
+    argparser.add_argument(
+        '--container_name',
+        type=str,
+        default=None,
+        help='container name to call docker '
+    )
 
 
     args = argparser.parse_args()
@@ -154,7 +160,8 @@ if __name__ == '__main__':
         "record_collisions": args.record_collisions,
         "host" : args.host,
         "port" : args.port,
-        "network_name" : args.network_name
+        "network_name" : args.network_name,
+        "container_name" : args.container_name
     }
     # There are two modes of execution
     if args.single_process is not None:
