@@ -100,6 +100,25 @@ if __name__ == '__main__':
         dest='record_collisions',
         help='Set to run carla using docker'
     )
+    argparser.add_argument(
+        '-ht','--host',
+        type=str,
+        help='host url to launch the carla game engine in'
+    )
+    argparser.add_argument(
+        '-pt','--port',
+        type=int,
+        default=2000,
+        help='docker port to launch the carla simulator in'
+    )
+    argparser.add_argument(
+        '--network_name',
+        type=str,
+        default=None,
+        help='sub network to launch the docker container in '
+    )
+
+
     args = argparser.parse_args()
 
     # Check if the vector of GPUs passed are valid.
@@ -132,7 +151,10 @@ if __name__ == '__main__':
         "suppress_output": True,
         "no_screen": args.no_screen,
         "docker": args.docker,
-        "record_collisions": args.record_collisions
+        "record_collisions": args.record_collisions,
+        "host" : args.host,
+        "port" : args.port,
+        "network_name" : args.network_name
     }
     # There are two modes of execution
     if args.single_process is not None:

@@ -39,6 +39,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         # You merge the yaml file with the global configuration structure.
         merge_with_yaml(os.path.join('configs', exp_batch, exp_alias + '.yaml'))
         set_type_of_process('train')
+       
         # Set the process into loading status.
         coil_logger.add_message('Loading', {'GPU': gpu})
 
