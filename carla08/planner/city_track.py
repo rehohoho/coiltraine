@@ -4,6 +4,7 @@
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
 import numpy as np
+import sys
 
 from carla08.planner.graph import sldist
 
@@ -95,7 +96,7 @@ class CityTrack(object):
 
         printing_grid = np.copy(self._map._grid._structure)
 
-        np.set_printoptions(edgeitems=3, infstr='inf', threshold=np.nan, linewidth=129)
+        np.set_printoptions(edgeitems=3, infstr='inf', threshold=sys.maxsize, linewidth=129)
 
         a_star = AStar()
         a_star.init_grid(self._map.get_graph_resolution()[0],
