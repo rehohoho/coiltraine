@@ -105,7 +105,7 @@ def get_latest_checkpoint_drive(control_filename):
     csv_file_path = os.path.join('_logs', g_conf.EXPERIMENT_BATCH_NAME,
                                  g_conf.EXPERIMENT_NAME, g_conf.PROCESS_NAME + '_csv')
 
-    print (" TESTED PATHJ ", csv_file_path)
+    print (" TESTED PATH ", csv_file_path)
     if not os.path.exists(os.path.join(csv_file_path, control_filename)):
         return None
 
