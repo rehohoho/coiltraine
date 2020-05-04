@@ -107,6 +107,31 @@ if __name__ == '__main__':
         dest='record_collisions',
         help='Set to run carla using docker'
     )
+    argparser.add_argument(
+        '-ht','--host',
+        type=str,
+        help='host url to launch the carla game engine in'
+    )
+    argparser.add_argument(
+        '-pt','--port',
+        type=int,
+        default=2000,
+        help='docker port to launch the carla simulator in'
+    )
+    argparser.add_argument(
+        '--network_name',
+        type=str,
+        default=None,
+        help='sub network to launch the docker container in '
+    )
+    argparser.add_argument(
+        '--container_name',
+        type=str,
+        default=None,
+        help='container name to call docker '
+    )
+
+
     args = argparser.parse_args()
 
     # Check if the vector of GPUs passed are valid.
@@ -139,7 +164,11 @@ if __name__ == '__main__':
         "suppress_output": True,
         "no_screen": args.no_screen,
         "docker": args.docker,
-        "record_collisions": args.record_collisions
+        "record_collisions": args.record_collisions,
+        "host" : args.host,
+        "port" : args.port,
+        "network_name" : args.network_name,
+        "container_name" : args.container_name
     }
     # There are two modes of execution
     if args.single_process is not None:
@@ -147,22 +176,28 @@ if __name__ == '__main__':
         # MODE 1: Single Process. Just execute a single experiment alias.
         ####
 
+        if len(args.gpus) != 1:
+            gpu = "0"
+        else:
+            gpu = args.gpus[0]
+        
         if args.exp is None:
             raise ValueError(" You should set the exp alias when using single process")
 
         create_exp_path(args.folder, args.exp)
 
         if args.single_process == 'train':
-            execute_train(gpu="0", exp_batch=args.folder, exp_alias=args.exp,
-                          suppress_output=False, number_of_workers=args.number_of_workers)
+            execute_train(gpu=gpu, exp_batch=args.folder, exp_alias=args.exp,
+                          suppress_output=False, number_of_workers= args.number_of_workers)
 
         elif args.single_process == 'validation':
-            execute_validation(gpu="0", exp_batch=args.folder, exp_alias=args.exp, dataset_length=args.validation_dataset_length,
+            execute_validation(gpu=gpu, exp_batch=args.folder, exp_alias=args.exp,
                                dataset=args.validation_datasets[0], suppress_output=False)
 
         elif args.single_process == 'drive':
             drive_params['suppress_output'] = False
-            execute_drive("0", args.folder, args.exp, list(args.driving_environments)[0], drive_params)
+            execute_drive(gpu, args.folder, args.exp, list(args.driving_environments)[0], drive_params)
+
         else:
             raise Exception("Invalid name for single process, chose from (train, validation, test)")
 

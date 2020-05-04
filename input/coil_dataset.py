@@ -187,7 +187,7 @@ class CoILDataset(Dataset):
         if 'gameTimestamp' in measurement_augmented:
             time_stamp = measurement_augmented['gameTimestamp']
         else:
-           time_stamp = measurement_augmented['elapsed_seconds']
+            time_stamp = measurement_augmented['elapsed_seconds']
 
         final_measurement = {}
         
@@ -281,7 +281,7 @@ class CoILDataset(Dataset):
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
-                    rgb = center_prefix + data_point_number + '.png'
+                    rgb = 'CentralRGB_' + data_point_number + '.png'
                     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
                     count_added_measurements += 1
 
@@ -292,7 +292,7 @@ class CoILDataset(Dataset):
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
-                    rgb = left_prefix + data_point_number + '.png'
+                    rgb = 'LeftRGB_' + data_point_number + '.png'
                     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
                     count_added_measurements += 1
 
@@ -303,7 +303,7 @@ class CoILDataset(Dataset):
 
                 if self.is_measurement_partof_experiment(final_measurement):
                     float_dicts.append(final_measurement)
-                    rgb = right_prefix + data_point_number + '.png'
+                    rgb = 'RightRGB_' + data_point_number + '.png'
                     sensor_data_names.append(os.path.join(episode.split('/')[-1], rgb))
                     count_added_measurements += 1
 
@@ -463,7 +463,7 @@ class CoILDataset(Dataset):
         inputs_vec = []
         for input_name in g_conf.INPUTS:
             inputs_vec.append(data[input_name])
-            
+
         return torch.cat(inputs_vec, 1)
 
     def extract_intentions(self, data):

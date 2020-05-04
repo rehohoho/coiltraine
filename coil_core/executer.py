@@ -63,7 +63,6 @@ def execute_drive(gpu, exp_batch, exp_alias, exp_set_name, params):
 
     """
 
-    params.update({'host': "127.0.0.1"})
 
     create_exp_path(exp_batch, exp_alias)
     p = multiprocessing.Process(target=run_drive.execute,

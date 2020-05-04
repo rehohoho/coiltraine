@@ -127,6 +127,7 @@ def execute(gpu, exp_batch, exp_alias, suppress_output=True, number_of_workers=1
         fusion_type, use_seg_input, use_seg_output = _get_model_configuration_flags()
 
         set_type_of_process('train')
+       
         # Set the process into loading status.
         coil_logger.add_message('Loading', {'GPU': gpu})
 
